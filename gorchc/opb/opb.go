@@ -1,6 +1,8 @@
 package opb
 
 import (
+	"fmt"
+
 	"github.com/gorch/gorch/internal/engine"
 )
 
@@ -16,5 +18,10 @@ type OperatorB1 struct {
 }
 
 func (o *OperatorB1) Execute(ctx *engine.Context) error {
+	return nil
+}
+
+func (o *OperatorB1) Prepare() error {
+	fmt.Println("Prepare from OperatorB1")
 	return nil
 }

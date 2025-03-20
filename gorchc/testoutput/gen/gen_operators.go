@@ -56,6 +56,7 @@ func(o *b1OperatorB1) Execute(ctx *gorch.Context) (err error) {
     }()
     return (*package02.OperatorB1)(o).Execute(ctx)
 }
+func(o *b1OperatorB1) Prepare() error {return (*package02.OperatorB1)(o).Prepare()}
 func(o *b1OperatorB1) IsGenerateOperatorCode() {}
 
 func init() {

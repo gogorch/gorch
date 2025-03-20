@@ -47,6 +47,9 @@ func(o *{{$operator.Name}}{{$operator.Struct}}) Execute(ctx *gorch.Context) (err
 {{- else}}
 func(o *{{$operator.Name}}{{$operator.Struct}}) Execute(ctx *gorch.Context) (err error) {return (*{{$operator.PkgAlias}}.{{$operator.Struct}})(o).Execute(ctx)}
 {{- end}}
+{{- if $operator.RType.HasPrepare}}
+func(o *{{$operator.Name}}{{$operator.Struct}}) Prepare() error {return (*{{$operator.PkgAlias}}.{{$operator.Struct}})(o).Prepare()}
+{{- end}}
 func(o *{{$operator.Name}}{{$operator.Struct}}) IsGenerateOperatorCode() {}
 {{- end}}
 {{- end}}

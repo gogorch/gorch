@@ -8,9 +8,14 @@ import (
 
 type OperatorRType struct {
 	Typ         reflect.Type
+	HasPrepare  bool
 	Injects     []*Field
 	Extracts    []*Field
 	AllDIFields map[string]struct{}
+}
+
+type tmpPrepareOperator interface {
+	Prepare() error
 }
 
 func AnalyzeOperator[T any]() *OperatorRType {
@@ -40,6 +45,10 @@ func AnalyzeOperator[T any]() *OperatorRType {
 				rt.Name(), field.Name, field.Type))
 		}
 		of.structTagFromField(i, field)
+	}
+
+	if _, ok := any(s).(tmpPrepareOperator); ok {
+		of.HasPrepare = true
 	}
 
 	return of
