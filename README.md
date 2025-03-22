@@ -283,10 +283,11 @@ START("test"){
 
     GO(GoOperator(sleep=20ms, val=10), "goOperator")
     -> SleepOp(sleep=2ms) // 等待goroutine启动
-    -> NothingOp(val="1", WAIT("goOperator", timeout=5ms)) }
+    -> NothingOp(val="1", WAIT("goOperator", timeout=5ms))
+}
 ```
 
-调用`Go`指令，传入一个执行元素（你可以传入算子，也可以是其他实现了执行元素）以及名称，那么这个执行元素，就会在一个新的goroutine中执行。
+调用`Go`指令，传入一个执行元素（即你可以传入算子，也可以是其他执行元素）以及名称，那么这个执行元素，就会在一个新的goroutine中执行。
 
 `WAIT`指令，会等待`GO`指令启动的goroutine执行完毕。
 
