@@ -3,7 +3,7 @@ package iparser
 import (
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +25,7 @@ FRAGMENT("456") {
 FRAGMENT("789") {
 	a1
 }`
-	reg := `REGISTER("github.com/gorch") {
+	reg := `REGISTER("github.com/gogorch") {
 	OPERATOR("gorch/ops", "a", "a1", 1)
 }`
 	RunMyTest(t, g, reg, func(p *ast.Primary, f string, e error) {
@@ -57,7 +57,7 @@ FRAGMENT("456") {
 FRAGMENT("789") {
 	a1
 }`
-	reg := `REGISTER("github.com/gorch") {
+	reg := `REGISTER("github.com/gogorch") {
 	OPERATOR("gorch/ops", "a", "a1", 1)
 }`
 	RunMyTest(t, g, reg, func(p *ast.Primary, f string, e error) {

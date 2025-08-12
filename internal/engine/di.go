@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/gorch/gorch/ort"
+	"github.com/gogorch/gorch/internal/ort"
 )
 
 type operatorFields ort.OperatorRType

@@ -24,7 +24,7 @@ FRAGMENT("test"){
 	@a(fatal=true) -> GO(a(changeTo=11), "aa")
 }
 
-REGISTER("github.com/gorch"){
+REGISTER("github.com/gogorch"){
 	OPERATOR("gorch/ops", "a", 1)
 	OPERATOR("gorch/ops", "b", 2)
 }

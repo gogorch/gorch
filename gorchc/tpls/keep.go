@@ -3,7 +3,7 @@ package tpls
 import (
 	_ "embed"
 
-	"github.com/gorch/gorch/ort"
+	"github.com/gogorch/gorch/internal/ort"
 )
 
 //go:embed operator_import.tpl

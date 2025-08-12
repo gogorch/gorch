@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/gorch/gorch/internal/lang/ast"
-	"github.com/gorch/gorch/mlog"
-	"github.com/gorch/gorch/pool"
-	"github.com/gorch/gorch/recorder"
+	"github.com/gogorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/mlog"
+	"github.com/gogorch/gorch/pool"
+	"github.com/gogorch/gorch/recorder"
 )
 
 type Engine interface {
@@ -144,20 +144,20 @@ func (s *executor) Execute(ctx context.Context) error {
 		rctx.recorder = recorder.NewRecorder()
 	}
 	if s.logOperatorName {
-		rctx.recorder.SetLogOperatorName()
+		rctx.recorder.EnableLogOperatorName()
 	}
 	if s.costThreshold > 0 {
 		rctx.recorder.SetCostThreshold(s.costThreshold)
 	}
 
-	rctx.recorder.Start()
+	rctx.recorder.StartRecording()
 	defer func() {
-		rctx.recorder.Stop()
+		rctx.recorder.StopRecording()
 
-		rs := rctx.recorder.OperatorRecordStr()
+		rs := rctx.recorder.GetOperatorRecords()
 		rctx.Logger.AddInfo(mlog.String("record", rs))
-		rctx.Logger.AddInfo(mlog.String("total", rctx.recorder.TotalCost()))
-		rctx.recorder.PutPool()
+		rctx.Logger.AddInfo(mlog.String("total", rctx.recorder.GetTotalCost()))
+		rctx.recorder.Release()
 
 		releaseContext(rctx)
 		executorPool.Put(s)

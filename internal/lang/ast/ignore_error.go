@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/gorch/gorch/internal/lang/iantlr/alr"
+import "github.com/gogorch/gorch/internal/lang/iantlr/alr"
 
 type IgnoreErrorHolder interface {
 	AcceptIgnoreErrorFlag() error

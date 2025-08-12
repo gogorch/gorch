@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gorch/gorch"
-	_ "github.com/gorch/gorch/gorchc/testoutput/gen"
+	"github.com/gogorch/gorch"
+	_ "github.com/gogorch/gorch/gorchc/testoutput/gen"
 )
 
 func main() {

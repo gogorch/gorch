@@ -8,7 +8,7 @@ import (
     {{- range $pkg, $operators := .Pkgs}}
 	{{$operators.PkgAlias}} "{{$pkg}}"
     {{- end}}
-    "github.com/gorch/gorch"
+    "github.com/gogorch/gorch"
 )
 var _ = fmt.Printf
 {{- range $pkg, $operators := .Pkgs}}

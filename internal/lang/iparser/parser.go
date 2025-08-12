@@ -6,9 +6,9 @@ import (
 	"path"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/gorch/gorch/internal/lang/ast"
-	"github.com/gorch/gorch/internal/lang/iantlr/alr"
-	"github.com/gorch/gorch/internal/lang/utils"
+	"github.com/gogorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/iantlr/alr"
+	"github.com/gogorch/gorch/internal/lang/utils"
 )
 
 var (

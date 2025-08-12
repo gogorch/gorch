@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorch/gorch/internal/lang/ast"
-	"github.com/gorch/gorch/mlog"
+	"github.com/gogorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/mlog"
 )
 
 func createProcessor(stmt any) PrepareProcessor {
@@ -395,7 +395,7 @@ func (op *operatorProcessor) Prepare() (err error) {
 }
 
 func (op *operatorProcessor) Execute(ctx *Context) (err error) {
-	endRecord := ctx.recorder.StartOperator(op.Name, op.operatorSeq)
+	endRecord := ctx.recorder.RecordOperator(op.Name, op.operatorSeq)
 	var statusCode int
 
 	defer func() {
@@ -403,30 +403,24 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 
 		if er := recover(); er != nil {
 			err = fmt.Errorf("operator %s execute panic", op.Name)
-
 			fields := RecoverPanic(er)
-			fields = append(fields,
-				mlog.String("panicOperator", op.Name))
+			fields = append(fields, mlog.String("panicOperator", op.Name))
 			ctx.Logger.Error("operator execute panic", fields...)
 		}
 
 		if err != nil {
 			if op.OperatorStmt.IgnoreError {
-				ctx.Logger.Warn("operator execute error, ignore",
-					mlog.String("operator", op.Name),
-					mlog.Error("error", err))
+				ctx.Logger.Warn("operator execute error, ignore", mlog.String("operator", op.Name), mlog.Error("error", err))
 				err = nil
 			} else {
-				ctx.Logger.Error("operator execute error",
-					mlog.String("operator", op.Name),
-					mlog.Error("error", err))
+				ctx.Logger.Error("operator execute error", mlog.String("operator", op.Name), mlog.Error("error", err))
 				ctx.Exit(err)
 			}
 		}
 	}()
 
 	if ctx.Exited() {
-		return
+		return nil
 	}
 
 	newCtx := ctx.clone()
@@ -439,32 +433,29 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 	newCtx.nextWrap = ctx.nextWrap
 
 	for _, wait := range op.waitList {
-		if err := wait.Execute(newCtx); err != nil {
-			return err
+		if werr := wait.Execute(newCtx); werr != nil {
+			err = werr
+			return
 		}
 	}
 
 	if ctx.Exited() {
-		return
+		return nil
 	}
 
 	of := op.operatorFactory
-
 	if to := op.args.Arg("timeout").Duration(); to > 0 {
 		timer := time.NewTimer(to)
 		ch := make(chan error, 1)
-
 		goRoutinePool.Go(func() {
 			ch <- of.Execute(newCtx)
 		})
-
 		select {
 		case err = <-ch:
 		case <-timer.C:
 			err = errOperatorExecuteTimeout
 		case err = <-ctx.Wait():
 		}
-
 		if !timer.Stop() {
 			select {
 			case <-timer.C:
@@ -477,23 +468,19 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 
 	if status, ok := err.(*status); ok {
 		statusCode = status.code
-
 		if status.fatal {
-			// 算子返回的status是fatal的，先判断算子是否要忽略错误
 			if op.OperatorStmt.IgnoreError {
-				ctx.Logger.Info("operator execute return fatal error, but ignore",
-					mlog.String("operator", op.Name), mlog.Error("error", err))
+				ctx.Logger.Info("operator execute return fatal error, but ignore", mlog.String("operator", op.Name), mlog.Error("error", err))
 				err = nil
 				return
 			}
-
 			ctx.Exit(status)
 			return
 		}
 		err = nil
 	}
 
-	return
+	return nil
 }
 
 type switchProcessor struct {

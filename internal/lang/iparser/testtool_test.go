@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 

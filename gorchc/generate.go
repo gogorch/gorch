@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorch/gorch/gorchc/tpls"
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/gorchc/tpls"
+	"github.com/gogorch/gorch/internal/lang/ast"
 )
 
 type codeGenerator struct {

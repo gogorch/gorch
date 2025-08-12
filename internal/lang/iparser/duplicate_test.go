@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRegisterOperatorDupName(t *testing.T) {
 	var reg = `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "a", 1)
 		OPERATOR("gorch/ops", "b", "a", 2)
 	}
@@ -25,11 +25,11 @@ func TestRegisterOperatorDupName(t *testing.T) {
 
 func TestRegisterOperatorDupName1(t *testing.T) {
 	var reg = `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "a", 1)
 	}
 
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "b", "a", 2)
 	}
 	`
@@ -43,7 +43,7 @@ func TestRegisterOperatorDupName1(t *testing.T) {
 
 func TestRegisterDupSeq(t *testing.T) {
 	var reg = `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "a", 1)
 		OPERATOR("gorch/ops", "b", 1)
 	}
@@ -65,7 +65,7 @@ func TestFragmentDuplicate(t *testing.T) {
 		FRAGMENT("123") {
 			b
 		}
-		REGISTER("github.com/gorch") {
+		REGISTER("github.com/gogorch") {
 		}
 		`
 		RunMyTest(t, registerSyntax, "", func(p *ast.Primary, f string, e error) {
@@ -84,7 +84,7 @@ func TestSwitchCaseDup(t *testing.T) {
 		}
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -106,7 +106,7 @@ func TestStartDup(t *testing.T) {
 		a
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -122,7 +122,7 @@ func TestStartGoDirectiveDup(t *testing.T) {
 		GO(a, "123") -> GO(a, "123")
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -141,7 +141,7 @@ func TestFragmentGoDirectiveDup(t *testing.T) {
 		GO(a, "123") -> GO(a, "123")
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -166,7 +166,7 @@ func TestGoDirectiveDup(t *testing.T) {
 		a -> GO(a, "123")
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -191,7 +191,7 @@ func TestGoDirectiveDup1(t *testing.T) {
 		a -> GO(a, "123")
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`
@@ -221,7 +221,7 @@ func TestGoDirectiveDup2(t *testing.T) {
 		a -> GO(a, "123")
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`

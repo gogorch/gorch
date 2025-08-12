@@ -3,7 +3,7 @@ package opb
 import (
 	"fmt"
 
-	"github.com/gorch/gorch/internal/engine"
+	"github.com/gogorch/gorch/internal/engine"
 )
 
 type OperatorB0 struct {

@@ -3,7 +3,7 @@ package iparser
 import (
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +21,7 @@ func TestStartCollectGoAndWaitSuc(t *testing.T) {
 		a -> a(b=true, WAIT("789"))
 	} `
 
-	reg := `REGISTER("github.com/gorch") {
+	reg := `REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}`
 	RunMyTest(t, g, reg, func(p *ast.Primary, f string, e error) {
@@ -48,7 +48,7 @@ func TestStartCollectGoAndWaitNotMatch(t *testing.T) {
 		a -> a(b=true, WAIT("789"))
 	}`
 	reg := `
-	REGISTER("github.com/gorch") {
+	REGISTER("github.com/gogorch") {
 		OPERATOR("gorch/ops", "p", "a", 1)
 	}
 	`

@@ -5,20 +5,20 @@ package gen_operators
 
 import (
     "fmt"
-	package00 "github.com/gorch/gorch/gorchc/opa"
-	package02 "github.com/gorch/gorch/gorchc/opb"
-    "github.com/gorch/gorch"
+	package00 "github.com/gogorch/gorch/gorchc/opa"
+	package02 "github.com/gogorch/gorch/gorchc/opb"
+    "github.com/gogorch/gorch"
 )
 var _ = fmt.Printf
 type a0OperatorA0 package00.OperatorA0
 func(o *a0OperatorA0) Execute(ctx *gorch.Context) (err error) {
     if er0 := ctx.MutableIns(&o.Name); er0 != nil {
-        return fmt.Errorf("inject github.com/gorch/gorch/gorchc/opa.OperatorA0.Name error: %v", er0)
+        return fmt.Errorf("inject github.com/gogorch/gorch/gorchc/opa.OperatorA0.Name error: %v", er0)
     }
     _ = ctx.MutableIns(&o.Age)
     defer func() {
         if er0 := ctx.RegisterIns(&o.Age, true); er0 != nil {
-            err = fmt.Errorf("extract github.com/gorch/gorch/gorchc/opa.OperatorA0.Age error: %v", er0)
+            err = fmt.Errorf("extract github.com/gogorch/gorch/gorchc/opa.OperatorA0.Age error: %v", er0)
             return
         }
         o.Age = nil
@@ -33,7 +33,7 @@ func(o *a1OperatorA1) Execute(ctx *gorch.Context) (err error) {
     _ = ctx.MutableIns(&o.Age)
     defer func() {
         if er0 := ctx.RegisterIns(&o.Age, true); er0 != nil {
-            err = fmt.Errorf("extract github.com/gorch/gorch/gorchc/opa.OperatorA1.Age error: %v", er0)
+            err = fmt.Errorf("extract github.com/gogorch/gorch/gorchc/opa.OperatorA1.Age error: %v", er0)
             return
         }
         o.Age = nil
@@ -49,7 +49,7 @@ type b1OperatorB1 package02.OperatorB1
 func(o *b1OperatorB1) Execute(ctx *gorch.Context) (err error) {
     defer func() {
         if er0 := ctx.RegisterIns(&o.Age, true); er0 != nil {
-            err = fmt.Errorf("extract github.com/gorch/gorch/gorchc/opb.OperatorB1.Age error: %v", er0)
+            err = fmt.Errorf("extract github.com/gogorch/gorch/gorchc/opb.OperatorB1.Age error: %v", er0)
             return
         }
         o.Age = nil

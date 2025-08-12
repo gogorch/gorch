@@ -1,9 +1,9 @@
 package gorch
 
 import (
-	"github.com/gorch/gorch/internal/engine"
-	"github.com/gorch/gorch/internal/lang/iparser"
-	"github.com/gorch/gorch/mlog"
+	"github.com/gogorch/gorch/internal/engine"
+	"github.com/gogorch/gorch/internal/lang/iparser"
+	"github.com/gogorch/gorch/mlog"
 )
 
 type Context = engine.Context

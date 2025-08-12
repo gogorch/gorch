@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +16,7 @@ START("test") {
 }
 `
 		reg := `
-REGISTER("github.com/gorch") {
+REGISTER("github.com/gogorch") {
 	OPERATOR("gorch/ops","a1", "a", 1)
 }`
 		RunMyTest(t, g, reg, func(p *ast.Primary, f string, e error) {
@@ -36,7 +36,7 @@ FRAGMENT("123") {
 }
 `
 		reg := `
-REGISTER("github.com/gorch") {
+REGISTER("github.com/gogorch") {
 	OPERATOR("gorch/ops","a1", "a", 1)
 	}`
 		RunMyTest(t, g, reg, func(p *ast.Primary, f string, e error) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorch/gorch/pool"
+	"github.com/gogorch/gorch/pool"
 )
 
 // Routine 异步执行的对象
@@ -49,27 +49,39 @@ func newRoutine(name string) *routine {
 
 func (r *routine) start(fn func()) (err error) {
 	r.mutex.Lock()
-	if r.startAt.IsZero() {
-		r.startAt = time.Now()
+	// 检查 routine 是否已经开始
+	if !r.startAt.IsZero() {
 		r.mutex.Unlock()
-		func() {
-			if er := recover(); er != nil {
-				err = fmt.Errorf("routine %s execute panic", r.name)
-			}
-			defer func() {
-				r.mutex.Lock()
-				r.signal <- struct{}{}
-				r.stopAt = time.Now()
-				r.mutex.Unlock()
-			}()
-			fn()
-		}()
-		return
+		return fmt.Errorf("routine %q is started", r.name)
 	}
-
+	r.startAt = time.Now()
+	// 在解锁后再执行函数，减少锁的持有时间
 	r.mutex.Unlock()
-	err = fmt.Errorf("routine %q is started", r.name)
-	return
+
+	done := make(chan struct{}, 1)
+	go func() {
+		defer func() {
+			if er := recover(); er != nil {
+				err = fmt.Errorf("routine %s execute panic: %v", r.name, er)
+			}
+			done <- struct{}{}
+		}()
+		fn()
+	}()
+
+	go func() {
+		<-done
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
+		// 避免重复发送信号
+		select {
+		case r.signal <- struct{}{}:
+		default:
+		}
+		r.stopAt = time.Now()
+	}()
+
+	return nil
 }
 
 // wait 方法用于等待一个 routine 完成执行，并且可以设置超时时间。
@@ -83,58 +95,67 @@ func (r *routine) start(fn func()) (err error) {
 //   - error: 如果等待超时或者 routine 执行出错，返回相应的错误信息。
 func (r *routine) wait(i *interrupt, timeout time.Duration, fromStart bool, notCheckStart bool) (err error) {
 	r.mutex.RLock()
+	// 检查 routine 是否已经开始执行
 	if r.startAt.IsZero() {
 		if !notCheckStart {
 			r.mutex.RUnlock()
 			return fmt.Errorf("routine %q not started", r.name)
 		}
 	}
-	// routine已经执行完成，直接返回
+	// routine 已经执行完成，直接返回
 	if !r.stopAt.IsZero() {
 		r.mutex.RUnlock()
 		return nil
 	}
 
+	// 计算实际的超时时间
+	var adjustedTimeout time.Duration
 	if fromStart && !r.startAt.IsZero() {
 		elapsed := time.Since(r.startAt)
 		if elapsed > timeout {
 			r.mutex.RUnlock()
 			return fmt.Errorf("routine %q execute timeout", r.name)
 		}
-		timeout = timeout - elapsed
+		adjustedTimeout = timeout - elapsed
+	} else {
+		adjustedTimeout = timeout
 	}
 	r.mutex.RUnlock()
 
-	now := time.Now()
-	if timeout > 0 {
-		timer := time.NewTimer(timeout)
+	// 记录开始等待的时间
+	waitStart := time.Now()
+	if adjustedTimeout > 0 {
+		timer := time.NewTimer(adjustedTimeout)
+		defer timer.Stop()
 
 		select {
 		case <-r.signal:
+			// 正常完成，记录阻塞时间
+			r.mutex.Lock()
+			r.blockCost += time.Since(waitStart)
+			r.mutex.Unlock()
 		case <-i.Wait():
 			err = fmt.Errorf("wait routine %q interrupted", r.name)
 		case <-timer.C:
 			r.mutex.Lock()
-			r.blockCost = time.Since(time.Now())
+			r.blockCost += time.Since(waitStart)
 			r.mutex.Unlock()
 			err = fmt.Errorf("wait routine %q timeout", r.name)
-		}
-
-		if !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
 		}
 	} else {
 		select {
 		case <-r.signal:
+			// 正常完成，记录阻塞时间
+			r.mutex.Lock()
+			r.blockCost += time.Since(waitStart)
+			r.mutex.Unlock()
 		case <-i.Wait():
 			err = fmt.Errorf("wait routine %q interrupted", r.name)
+		default:
+			// 无超时设置，非阻塞检查
+			return fmt.Errorf("wait routine %q not finished yet", r.name)
 		}
 	}
-
-	r.blockCost += time.Since(now)
 	return err
 }
 

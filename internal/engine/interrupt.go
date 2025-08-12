@@ -3,7 +3,7 @@ package engine
 import (
 	"sync"
 
-	"github.com/gorch/gorch/pool"
+	"github.com/gogorch/gorch/pool"
 )
 
 // 中断器，每次执行引擎时自动创建的对象，方便用户可以随时终止程序执行

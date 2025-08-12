@@ -13,8 +13,8 @@ import (
 	{{- range $pkg, $operators := .Pkgs}}
 	{{$operators.PkgAlias}} "{{$pkg}}"
 	{{- end}}
-	"github.com/gorch/gorch/ort"
-	"github.com/gorch/gorch/gorchc/tpls"
+	"github.com/gogorch/gorch/ort"
+	"github.com/gogorch/gorch/gorchc/tpls"
 )
 
 func main() {

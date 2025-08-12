@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +16,7 @@ func strip(s string) string {
 }
 
 var registerOp = `
-REGISTER("github.com/gorch") {
+REGISTER("github.com/gogorch") {
     OPERATOR("gorch/ops", "p", 1)
     OPERATOR("gorch/ops", "p1", 2)
     OPERATOR("gorch/ops", "test", "op", 3)

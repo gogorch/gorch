@@ -1,10 +1,100 @@
 package engine
 
 import (
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+// 实现Releasable接口的测试结构体，其Release方法会触发panic
+type PanicReleasable struct {
+	Name string
+}
+
+func (p *PanicReleasable) Release() {
+	panic("test panic in Release")
+}
+
+// 正常的Releasable实现，用于对比测试
+type NormalReleasable struct {
+	Name     string
+	Released bool
+}
+
+func (n *NormalReleasable) Release() {
+	n.Released = true
+	log.Printf("NormalReleasable %s released\n", n.Name)
+}
+
+// 测试releaseInstances函数对panic的处理
+func TestReleaseInstancesPanic(t *testing.T) {
+	// 创建测试实例
+	panicIns := &PanicReleasable{Name: "panic"}
+	normalIns := &NormalReleasable{Name: "normal", Released: false}
+
+	cter := newContainer()
+	cter.RegisterIns(&panicIns, false)
+	cter.RegisterIns(&normalIns, false)
+
+	// 调用releaseInstances，这应该会触发panic但被捕获
+	releaseContainer(cter)
+
+	// 验证正常实例被正确释放
+	assert.True(t, normalIns.Released, "normalIns should be released")
+
+	// 如果程序能执行到这里，说明panic被成功捕获
+	assert.True(t, true, "panic was successfully captured")
+}
+
+type MyStruct struct {
+	name     string
+	released bool
+}
+
+// 实现 Release 接口
+type MyReleasableStruct struct {
+	name     string
+	released bool
+}
+
+func (m *MyReleasableStruct) Release() { m.released = true }
+
+type MyInterface interface{}
+type MyReleasableInterface interface{ Release() }
+
+func TestReleaseInstances(t *testing.T) {
+	cter := newContainer()
+
+	// 基础类型
+	a := 123
+	cter.RegisterIns(&a, false)
+
+	// 指针类型未实现 Release
+	b := &MyStruct{name: "b"}
+	cter.RegisterIns(&b, false)
+
+	// 指针类型实现 Release
+	c := &MyReleasableStruct{name: "c"}
+	cter.RegisterIns(&c, false)
+
+	// 接口类型未实现 Release
+	var d MyInterface = &MyStruct{name: "d"}
+	cter.RegisterIns(&d, false)
+
+	// 接口类型实现 Release
+	var e MyReleasableInterface = &MyReleasableStruct{name: "e"}
+	cter.RegisterIns(&e, false)
+
+	// 释放
+	releaseInstances(cter.instances)
+
+	// 验证
+	assert.Equal(t, false, b.released, "b should not be released")
+	assert.Equal(t, true, c.released, "c should be released")
+	assert.Equal(t, false, d.(*MyStruct).released, "d should not be released")
+	assert.Equal(t, true, e.(*MyReleasableStruct).released, "e should be released")
+}
 
 func TestRegisterInsAndMutables(t *testing.T) {
 	cter := newContainer()

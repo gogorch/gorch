@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorch/gorch/internal/lang/iparser"
+	"github.com/gogorch/gorch/internal/lang/iparser"
 	"github.com/stretchr/testify/assert"
 )
 

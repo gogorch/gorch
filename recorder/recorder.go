@@ -5,45 +5,44 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorch/gorch/pool"
+	"github.com/gogorch/gorch/pool"
 )
 
 // Recorder 算子执行结果记录器
-
 type Recorder interface {
-	// SetLogOperatorName 记录算子名称到日志中
-	SetLogOperatorName()
+	// EnableLogOperatorName 记录算子名称到日志中
+	EnableLogOperatorName()
 
 	// CostThreshold 记录算子耗时的分界点，大于这个耗时就会记录算子耗时，否则算子不记录耗时
 	// 你可以修改这个全局变量来改变行为
 	SetCostThreshold(time.Duration)
 
-	// Start 开始记录引擎执行
-	Start()
+	// StartRecording 开始记录引擎执行
+	StartRecording()
 
-	// Stop 引擎执行结束
-	Stop()
+	// StopRecording 引擎执行结束
+	StopRecording()
 
-	// StartOperator 开始记录算子执行
+	// RecordOperator 开始记录算子执行
 	// 返回一个函数，当算子执行结束时，调用这个函数，记录算子执行结果
-	StartOperator(name string, seq string) func(int)
+	RecordOperator(name string, seq string) func(int)
 
-	// FromStart 返回从开始执行到现在的时间
-	FromStart() time.Duration
+	// ElapsedTime 返回从开始执行到现在的时间
+	ElapsedTime() time.Duration
 
-	// OperatorRecordStr 返回算子执行记录的字符串
+	// GetOperatorRecords 返回算子执行记录的字符串
 	// 字符串格式：算子名称,算子开始执行时间,算子执行耗时,算子执行状态
 	// 如果算子执行成功，那么默认状态码为0，为0时不记录日志；否则状态码为算子执行返回的状态码
 	// 如果算子的执行时间小于CostThreshold，那么不记录算子的执行时间
 	// 默认CostThreshold为100微秒
 	// 多个算子执行记录之间默认用 | 分隔
-	OperatorRecordStr() string
+	GetOperatorRecords() string
 
-	// TotalCost 返回引擎执行总耗时
-	TotalCost() string
+	// GetTotalCost 返回引擎执行总耗时
+	GetTotalCost() string
 
-	// PutPool 回收对象到对象池
-	PutPool()
+	// Release 回收对象到对象池
+	Release()
 }
 
 type recorder struct {
@@ -99,11 +98,11 @@ func NewRecorder() Recorder {
 	return r
 }
 
-func (r *recorder) Start() {
+func (r *recorder) StartRecording() {
 	r.startTime = time.Now()
 }
 
-func (r *recorder) StartOperator(name string, seq string) func(int) {
+func (r *recorder) RecordOperator(name string, seq string) func(int) {
 	start := time.Now()
 	return func(i int) {
 		cost := time.Since(start)
@@ -121,7 +120,7 @@ func (r *recorder) StartOperator(name string, seq string) func(int) {
 	}
 }
 
-func (r *recorder) SetLogOperatorName() {
+func (r *recorder) EnableLogOperatorName() {
 	r.logOperatorName = true
 }
 
@@ -129,15 +128,15 @@ func (r *recorder) SetCostThreshold(t time.Duration) {
 	r.costThreshold = t
 }
 
-func (r *recorder) FromStart() time.Duration {
+func (r *recorder) ElapsedTime() time.Duration {
 	return time.Since(r.startTime)
 }
 
-func (r *recorder) Stop() {
+func (r *recorder) StopRecording() {
 	r.cost = time.Since(r.startTime)
 }
 
-func (r *recorder) OperatorRecordStr() string {
+func (r *recorder) GetOperatorRecords() string {
 	buf := pool.BytesBufferPool.Get()
 	defer pool.BytesBufferPool.Put(buf)
 	for i, or := range r.ors {
@@ -166,11 +165,11 @@ func durationToMillStr(d time.Duration) string {
 	return strconv.FormatFloat(ms, 'f', 3, 64) // 格式化为字符串，保留三位小数
 }
 
-func (r *recorder) TotalCost() string {
+func (r *recorder) GetTotalCost() string {
 	return durationToMillStr(r.cost)
 }
 
-func (r *recorder) PutPool() {
+func (r *recorder) Release() {
 	if r == nil {
 		return
 	}

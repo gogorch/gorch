@@ -2,7 +2,7 @@ package ast
 
 import (
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/gorch/gorch/internal/lang/utils"
+	"github.com/gogorch/gorch/internal/lang/utils"
 )
 
 type GorchlangParserListener struct {

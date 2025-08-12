@@ -1,6 +1,6 @@
 package opa
 
-import "github.com/gorch/gorch/internal/engine"
+import "github.com/gogorch/gorch/internal/engine"
 
 type OperatorA0 struct {
 	Name *string `inject:""`

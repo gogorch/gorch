@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/gorch/gorch/mlog"
-	"github.com/gorch/gorch/pool"
-	"github.com/gorch/gorch/recorder"
+	"github.com/gogorch/gorch/mlog"
+	"github.com/gogorch/gorch/pool"
+	"github.com/gogorch/gorch/recorder"
 )
 
 // Context 框架执行每个算子的上下文，每次执行算子都会获得一个全新的Context对象

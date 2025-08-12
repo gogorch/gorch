@@ -2,10 +2,11 @@ package engine
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 
-	"github.com/gorch/gorch/pool"
+	"github.com/gogorch/gorch/pool"
 )
 
 var (
@@ -37,30 +38,63 @@ func (cter *container) reset() {
 	cter.mutex = pool.RWMutexPool.Get()
 }
 
-// PutPoolAble 支持将对象放回池中的对象
-type PutPoolAble interface {
-	PutPool()
+// Releasable 支持将对象放回池中的对象
+type Releasable interface {
+	Release()
 }
 
+// releaseContainer 负责将容器及其包含的对象放回相应的对象池。
+// 在放回对象前，会检查对象是否实现了 Releasable 接口，若实现则调用其 Release 方法。
 func releaseContainer(cter *container) {
-	// 如果对象支持PutPool方法，则调用PutPool方法，对象可以由业务自行决定是否放回池中
-	// 这里要加锁吗？不用，已经是引擎执行完的状态，不需要再考虑并发问题
-	for _, i := range cter.instances {
-		if i.IsNil() {
+	if cter == nil {
+		return
+	}
+
+	// 释放容器中的实例对象
+	releaseInstances(cter.instances)
+
+	// 释放容器中的协程对象
+	releaseRoutines(cter.routines)
+
+	// 释放互斥锁
+	pool.RWMutexPool.Put(cter.mutex)
+
+	// 重置容器
+	cter.reset()
+
+	// 将容器放回对象池
+	containerPool.Put(cter)
+}
+
+// releaseInstances 释放容器中的实例对象，若对象实现了 Releasable 接口，则调用其 Release 方法。
+func releaseInstances(instances map[reflect.Type]reflect.Value) {
+	for _, ins := range instances {
+		// 检查值是否有效且不是零值
+		if !ins.IsValid() || (ins.Kind() == reflect.Ptr && ins.IsNil()) {
 			continue
 		}
-		if i.CanInterface() {
-			if p, ok := i.Interface().(PutPoolAble); ok && p != nil {
-				p.PutPool()
+		if ins.CanInterface() {
+			if p, ok := ins.Interface().(Releasable); ok && p != nil {
+				func() {
+					defer func() {
+						if err := recover(); err != nil {
+							log.Printf("[releaseInstances] panic when releasing instance: %v\n", err)
+						}
+					}()
+					p.Release()
+				}()
 			}
 		}
 	}
+}
 
-	for _, r := range cter.routines {
-		routinePool.Put(r)
+// releaseRoutines 释放容器中的协程对象，将其放回协程池。
+func releaseRoutines(routines map[string]*routine) {
+	for _, r := range routines {
+		if r != nil {
+			routinePool.Put(r)
+		}
 	}
-	pool.RWMutexPool.Put(cter.mutex)
-	containerPool.Put(cter)
 }
 
 // RegisterIns 注册一个对象到当前调用的对象容器中，对象必须是一个指针类型的对象，否则会报错
@@ -81,62 +115,56 @@ func releaseContainer(cter *container) {
 //	cter.RegisterIns(&a, true)
 func (cter *container) RegisterIns(ins any, replace bool) error {
 	rvVal := reflect.ValueOf(ins)
-
 	if !rvVal.IsValid() {
 		return errRegisterInvalidIns
 	}
-
 	rvType := rvVal.Type()
-
 	if rvType.Kind() != reflect.Ptr {
 		return errRegisterNotPtr
 	}
-
+	if rvVal.IsNil() {
+		return fmt.Errorf("register error: pointer is nil")
+	}
 	rVal := rvVal.Elem()
 	rTyp := rVal.Type()
 
 	cter.mutex.Lock()
+	defer cter.mutex.Unlock()
 	if cter.instances == nil {
 		cter.instances = make(map[reflect.Type]reflect.Value)
 	}
 	if _, has := cter.instances[rTyp]; has && !replace {
-		cter.mutex.Unlock()
 		return fmt.Errorf("register error: duplicate type, error type: %s", rTyp)
 	}
-
 	cter.instances[rTyp] = rVal
-	cter.mutex.Unlock()
-
 	return nil
 }
 
 // MutableIns 获取一个对象值，对象必须是一个指针类型的对象，否则会报错
 func (cter *container) MutableIns(val any) error {
 	rvVal := reflect.ValueOf(val)
-
 	if !rvVal.IsValid() {
 		return errMutableInvalidIns
 	}
-
 	rvType := rvVal.Type()
-
 	if rvType.Kind() != reflect.Ptr {
 		return errMutableNotPtr
 	}
-
+	if rvVal.IsNil() {
+		return fmt.Errorf("mutable error: pointer is nil")
+	}
 	rVal := rvVal.Elem()
 	rTyp := rVal.Type()
 
 	cter.mutex.RLock()
+	defer cter.mutex.RUnlock()
 	if cter.instances == nil {
 		cter.instances = make(map[reflect.Type]reflect.Value)
 	}
 	rvIns, has := cter.instances[rTyp]
-	cter.mutex.RUnlock()
 	if !has {
 		return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
 	}
-
 	rVal.Set(rvIns)
 	return nil
 }
@@ -175,7 +203,8 @@ func (cter *container) getRoutine(name string) *routine {
 	var r *routine
 	cter.mutex.RLock()
 	if cter.routines != nil {
-		r, has := cter.routines[name]
+		var has bool
+		r, has = cter.routines[name]
 		if has {
 			cter.mutex.RUnlock()
 			return r

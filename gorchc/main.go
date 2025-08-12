@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gorch/gorch/internal/lang/iparser"
+	"github.com/gogorch/gorch/internal/lang/iparser"
 )
 
 // g 生成所有代码到指定目录

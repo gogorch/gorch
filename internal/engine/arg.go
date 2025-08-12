@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/gorch/gorch/internal/lang/ast"
+	"github.com/gogorch/gorch/internal/lang/ast"
 )
 
 type args struct {

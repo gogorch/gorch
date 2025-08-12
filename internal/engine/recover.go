@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/gorch/gorch/mlog"
+	"github.com/gogorch/gorch/mlog"
 )
 
 // RecoverPanic 函数用于从 panic 中恢复，并返回包含错误信息和堆栈跟踪的日志属性切片。

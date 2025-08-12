@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorch/gorch/internal/lang/iantlr/alr"
+	"github.com/gogorch/gorch/internal/lang/iantlr/alr"
 )
 
 type StartDirective struct {

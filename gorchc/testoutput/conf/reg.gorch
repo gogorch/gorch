@@ -1,9 +1,9 @@
-REGISTER("github.com/gorch"){
+REGISTER("github.com/gogorch"){
 	OPERATOR("gorch/gorchc/opa", "OperatorA0", "a0", 1)
 	OPERATOR("gorch/gorchc/opa", "OperatorA1", "a1", 2)
 	OPERATOR("gorch/gorchc/opb", "OperatorB0", "b0", 10)
 }
 
-REGISTER("github.com/gorch"){
+REGISTER("github.com/gogorch"){
 	OPERATOR("gorch/gorchc/opb", "OperatorB1", "b1", 11)
 }
