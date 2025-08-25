@@ -3,6 +3,7 @@ package gorch
 import (
 	"github.com/gogorch/gorch/internal/engine"
 	"github.com/gogorch/gorch/internal/lang/iparser"
+	"github.com/gogorch/gorch/internal/ort"
 	"github.com/gogorch/gorch/mlog"
 )
 
@@ -45,4 +46,10 @@ func RegOp[T any](name string, seq uint) error {
 //	使用方法：MustPtr(1)
 func MustPtr[T any](val T) *T {
 	return &val
+}
+
+// AnalyzeOperator 分析泛型类型 T 的结构体信息，提取注入和提取字段，并判断是否实现了 Prepare 方法。
+// 返回一个包含分析结果的 OperatorRType 指针。
+func AnalyzeOperator[T any]() *ort.OperatorRType {
+	return ort.AnalyzeOperator[T]()
 }

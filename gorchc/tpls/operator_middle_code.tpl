@@ -13,7 +13,7 @@ import (
 	{{- range $pkg, $operators := .Pkgs}}
 	{{$operators.PkgAlias}} "{{$pkg}}"
 	{{- end}}
-	"github.com/gogorch/gorch/ort"
+	"github.com/gogorch/gorch"
 	"github.com/gogorch/gorch/gorchc/tpls"
 )
 
@@ -52,7 +52,7 @@ var obj = map[string]tpls.PkgOperators{
 				Name:     "{{index $opvals 1}}",
 				Struct:   "{{index $opvals 0}}",
 				Seq:      "{{index $opvals 2}}",
-				RType:    ort.AnalyzeOperator[{{$operators.PkgAlias}}.{{index $opvals 0}}](),
+				RType:    gorch.AnalyzeOperator[{{$operators.PkgAlias}}.{{index $opvals 0}}](),
 			},
 			{{- end}}
 		},
