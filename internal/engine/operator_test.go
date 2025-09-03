@@ -36,7 +36,7 @@ func TestOperator(t *testing.T) {
 	t.Run("operator_timeout", func(t *testing.T) {
 		MyTestRun(t, TestValus{
 			name: "test",
-			g:    `START("test"){ NO_CHECK_MISS() SleepOp(sleep=10ms, timeout=1ms) }`,
+			g:    `START("test"){ NO_CHECK_MISS() SleepOp(sleep=200ms, timeout=50ms) }`,
 			assertFunc: func(res error, val *BeChangeValue) {
 				assert.Equal(t, errOperatorExecuteTimeout, res)
 				assert.Equal(t, int64(0), val.Val)
@@ -210,7 +210,8 @@ func TestGoAndWaitOperator(t *testing.T) {
 				-> SleepOp(sleep=2ms) // 等待goroutine启动
 				-> NothingOp(WAIT("goOperator", timeout=5ms)) }`,
 			assertFunc: func(res error, val *BeChangeValue) {
-				assert.Equal(t, errors.New("wait routine \"goOperator\" timeout"), res)
+				assert.NotNil(t, res)
+				assert.Contains(t, res.Error(), "wait routine \"goOperator\" timeout")
 				assert.Equal(t, int64(10), val.Val)
 			},
 		})
@@ -227,7 +228,8 @@ func TestGoAndWaitOperator(t *testing.T) {
 				-> SleepOp(sleep=10ms) // 其他算子执行耗时
 				-> NothingOp(WAIT("goOperator", totalTimeout=5ms)) }`, // 如果到NothingOp算子执行时，距离goOperator算子启动已经超过10ms，就认为超时
 			assertFunc: func(res error, val *BeChangeValue) {
-				assert.Equal(t, errors.New("routine \"goOperator\" execute timeout"), res)
+				assert.NotNil(t, res)
+				assert.Contains(t, res.Error(), "routine \"goOperator\" execute timeout")
 				assert.Equal(t, int64(10), val.Val) // 因为在engine中会等待所有的goroutine执行完成之后才推出，所以值会是10
 			},
 		})

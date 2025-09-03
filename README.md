@@ -206,11 +206,56 @@ START("conditional") {
 ### 高级特性
 
 #### 异步执行 (`GO` & `WAIT`)
+
+Gorch支持强大的异步执行模式，允许任务在后台运行，提高整体执行效率：
+
 ```gorch
-START("async") {
-    GO(SlowOperation(timeout=30s), "slow_task")  // 后台执行
-    -> FastOperation()                           // 立即执行
-    -> FinalStep(WAIT("slow_task", timeout=35s)) // 等待异步任务
+START("async_demo") {
+    // 启动后台任务
+    GO(SlowNetworkCall(), "network_task")
+    GO(DatabaseQuery(), "db_task")
+
+    // 立即执行其他任务
+    -> FastLocalOperation()
+
+    // 等待后台任务完成
+    -> ProcessResult(
+        WAIT("network_task", timeout=30s),      // 等待网络任务，最多30秒
+        WAIT("db_task", totalTimeout=45s)       // 从任务开始算，总共45秒
+    )
+}
+```
+
+**WAIT 指令参数详解：**
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `timeout` | 等待超时时间（从开始等待时计算） | `timeout=30s` |
+| `totalTimeout` | 总超时时间（从任务开始执行时计算） | `totalTimeout=60s` |
+| `notCheckStart` | 允许等待未启动的任务 | `notCheckStart=true` |
+
+**等待模式对比：**
+
+```gorch
+START("wait_modes") {
+    GO(SlowTask(), "task1")
+    GO(SlowTask(), "task2")
+    GO(SlowTask(), "task3")
+
+    // 立即执行其他操作，耗时10秒
+    -> SomeOtherWork(duration=10s)
+
+    // 不同的等待模式
+    -> ProcessResults(
+        // 模式1：timeout - 从现在开始等待20秒
+        WAIT("task1", timeout=20s),
+
+        // 模式2：totalTimeout - 从task2开始执行算起，总共30秒
+        WAIT("task2", totalTimeout=30s),
+
+        // 模式3：无限等待
+        WAIT("task3")
+    )
 }
 ```
 
@@ -451,7 +496,6 @@ func (o *UserOperator) Execute(ctx *gorch.Context) error {
 **状态码级别说明：**
 - `Fatal(code, msg)` - 致命错误，会中断整个执行流程
 - `Info(code, msg)` - 信息状态，记录日志但不中断执行
-- `Warn(code, msg)` - 警告状态，记录警告日志
 
 **使用场景：**
 - 🔍 **业务状态追踪** - 精确记录每个算子的执行状态

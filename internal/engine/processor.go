@@ -297,14 +297,14 @@ func (wp *waitProcessor) Prepare() error {
 func (wp *waitProcessor) Execute(ctx *Context) error {
 	r := ctx.container.getRoutine(wp.GoName)
 
-	timeout := wp.Timeout
-	fromStart := false
-	if wp.TotalTimeout > 0 {
-		fromStart = true
-		timeout = wp.TotalTimeout
+	// 创建等待配置
+	config := &WaitConfig{
+		Timeout:         wp.Timeout,
+		TotalTimeout:    wp.TotalTimeout,
+		AllowNotStarted: wp.NotCheckStart,
 	}
 
-	err := r.wait(ctx.interrupt, timeout, fromStart, wp.NotCheckStart)
+	err := r.wait(ctx.interrupt, config)
 	if wp.IgnoreError && err != nil {
 		ctx.Logger.Warn("wait routine error", mlog.Error("error", err), mlog.String("routine", wp.GoName))
 		err = nil
@@ -450,17 +450,31 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		goRoutinePool.Go(func() {
 			ch <- of.Execute(newCtx)
 		})
+
+		var timedOut bool
 		select {
-		case err = <-ch:
-		case <-timer.C:
+		case err = <-ch: // 算子正常完成
+		case <-timer.C: // 超时
 			err = errOperatorExecuteTimeout
-		case err = <-ctx.Wait():
+			timedOut = true
+		case err = <-ctx.Wait(): // 中断
 		}
+
 		if !timer.Stop() {
 			select {
 			case <-timer.C:
 			default:
 			}
+		}
+
+		// 如果超时了，即使后来算子完成了，也要保持超时错误
+		if timedOut {
+			select {
+			case <-ch:
+				// 算子在超时后完成了，但我们仍然返回超时错误
+			default:
+			}
+			err = errOperatorExecuteTimeout
 		}
 	} else {
 		err = of.Execute(newCtx)
@@ -480,7 +494,7 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		err = nil
 	}
 
-	return nil
+	return
 }
 
 type switchProcessor struct {

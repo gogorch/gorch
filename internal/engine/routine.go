@@ -8,6 +8,67 @@ import (
 	"github.com/gogorch/gorch/pool"
 )
 
+// WaitConfig 等待配置，用于配置routine等待行为
+type WaitConfig struct {
+	// Timeout 等待超时时间，从开始等待时计算
+	// 如果为0，表示无限等待
+	Timeout time.Duration
+
+	// TotalTimeout 总超时时间，从routine开始执行时计算
+	// 如果设置了此值，会覆盖Timeout的行为
+	TotalTimeout time.Duration
+
+	// AllowNotStarted 是否允许等待未启动的routine
+	// 如果为false，等待未启动的routine会立即返回错误
+	// 如果为true，会等待routine启动后再开始计时
+	AllowNotStarted bool
+}
+
+// WaitMode 等待模式枚举
+type WaitMode int
+
+const (
+	// WaitModeTimeout 超时等待模式 - 从开始等待时计时
+	WaitModeTimeout WaitMode = iota
+	// WaitModeTotalTimeout 总超时模式 - 从routine开始执行时计时
+	WaitModeTotalTimeout
+	// WaitModeInfinite 无限等待模式
+	WaitModeInfinite
+)
+
+// String 返回等待模式的字符串描述
+func (wm WaitMode) String() string {
+	switch wm {
+	case WaitModeTimeout:
+		return "timeout"
+	case WaitModeTotalTimeout:
+		return "total-timeout"
+	case WaitModeInfinite:
+		return "infinite"
+	default:
+		return "unknown"
+	}
+}
+
+// GetWaitMode 根据配置获取等待模式
+func (wc *WaitConfig) GetWaitMode() WaitMode {
+	if wc.TotalTimeout > 0 {
+		return WaitModeTotalTimeout
+	}
+	if wc.Timeout > 0 {
+		return WaitModeTimeout
+	}
+	return WaitModeInfinite
+}
+
+// GetEffectiveTimeout 获取有效的超时时间
+func (wc *WaitConfig) GetEffectiveTimeout() time.Duration {
+	if wc.TotalTimeout > 0 {
+		return wc.TotalTimeout
+	}
+	return wc.Timeout
+}
+
 // Routine 异步执行的对象
 // 在dsl中，使用 `GO(operator, "name")` 发起一次异步执行
 // 发起之后，就可以通过 `WAIT` 指令等待routine的结果。示例：`operator(arg=1, WAIT("name"))`
@@ -22,7 +83,7 @@ type routine struct {
 	name string
 	// result routine的执行结果，只能是error或者nil
 	// 框架内部会用这个属性==nil来判断是否
-	signal chan struct{}
+	done chan struct{}
 	// startAt routine开始执行的时间
 	startAt time.Time
 	// stopAt routine结束执行的时间
@@ -37,7 +98,7 @@ var (
 		r.startAt = zeroTime
 		r.stopAt = zeroTime
 		r.blockCost = 0
-		r.signal = make(chan struct{}, 1)
+		r.done = make(chan struct{})
 	})
 )
 
@@ -72,95 +133,116 @@ func (r *routine) start(fn func()) (err error) {
 	go func() {
 		<-done
 		r.mutex.Lock()
-		defer r.mutex.Unlock()
-		// 避免重复发送信号
-		select {
-		case r.signal <- struct{}{}:
-		default:
-		}
 		r.stopAt = time.Now()
+		r.mutex.Unlock()
+		// 关闭done channel通知所有等待者
+		close(r.done)
 	}()
 
 	return nil
 }
 
-// wait 方法用于等待一个 routine 完成执行，并且可以设置超时时间。
+// wait 方法用于等待一个 routine 完成执行
 // 参数:
-//   - i: 一个 interrupt 对象，用于在等待过程中接收中断信号。
-//   - timeout: 等待的超时时间。
-//   - fromStart: 是否从 routine 开始执行时开始计时。
-//   - notCheckStart: 不检查 routine 是否已经开始执行。
+//   - i: interrupt 对象，用于接收中断信号
+//   - config: 等待配置，包含超时设置和行为控制
 //
 // 返回值:
-//   - error: 如果等待超时或者 routine 执行出错，返回相应的错误信息。
-func (r *routine) wait(i *interrupt, timeout time.Duration, fromStart bool, notCheckStart bool) (err error) {
+//   - error: 等待过程中的错误信息
+func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
+	waitStart := time.Now()
+	waitMode := config.GetWaitMode()
+	effectiveTimeout := config.GetEffectiveTimeout()
+
+	// 首先进行状态检查
 	r.mutex.RLock()
-	// 检查 routine 是否已经开始执行
-	if r.startAt.IsZero() {
-		if !notCheckStart {
-			r.mutex.RUnlock()
-			return fmt.Errorf("routine %q not started", r.name)
-		}
-	}
-	// routine 已经执行完成，直接返回
+	// 检查routine是否已经完成
 	if !r.stopAt.IsZero() {
 		r.mutex.RUnlock()
 		return nil
 	}
 
-	// 计算实际的超时时间
-	var adjustedTimeout time.Duration
-	if fromStart && !r.startAt.IsZero() {
-		elapsed := time.Since(r.startAt)
-		if elapsed > timeout {
-			r.mutex.RUnlock()
-			return fmt.Errorf("routine %q execute timeout", r.name)
+	// 检查routine是否已经开始执行
+	if r.startAt.IsZero() && !config.AllowNotStarted {
+		r.mutex.RUnlock()
+		return fmt.Errorf("routine %q not started", r.name)
+	}
+
+	// 计算超时时间
+	var hasTimeout bool
+	var deadline time.Time
+
+	if waitMode != WaitModeInfinite {
+		hasTimeout = true
+		if waitMode == WaitModeTotalTimeout && !r.startAt.IsZero() {
+			deadline = r.startAt.Add(effectiveTimeout)
+			// 检查是否已经超时
+			if time.Now().After(deadline) {
+				r.mutex.RUnlock()
+				return fmt.Errorf("routine %q execute timeout (total: %v)", r.name, effectiveTimeout)
+			}
+		} else {
+			deadline = waitStart.Add(effectiveTimeout)
 		}
-		adjustedTimeout = timeout - elapsed
-	} else {
-		adjustedTimeout = timeout
 	}
 	r.mutex.RUnlock()
 
-	// 记录开始等待的时间
-	waitStart := time.Now()
-	if adjustedTimeout > 0 {
-		timer := time.NewTimer(adjustedTimeout)
+	// 等待逻辑
+	if hasTimeout {
+		// 有超时的等待
+		remainingTimeout := time.Until(deadline)
+		if remainingTimeout <= 0 {
+			// 已经超时，进行非阻塞检查
+			select {
+			case <-r.done:
+				return nil
+			case <-i.Wait():
+				return fmt.Errorf("wait routine %q interrupted", r.name)
+			default:
+				return fmt.Errorf("wait routine %q timeout (%v, mode: %s)",
+					r.name, effectiveTimeout, waitMode)
+			}
+		}
+
+		timer := time.NewTimer(remainingTimeout)
 		defer timer.Stop()
 
 		select {
-		case <-r.signal:
+		case <-r.done:
 			// 正常完成，记录阻塞时间
 			r.mutex.Lock()
 			r.blockCost += time.Since(waitStart)
 			r.mutex.Unlock()
+			return nil
 		case <-i.Wait():
-			err = fmt.Errorf("wait routine %q interrupted", r.name)
+			return fmt.Errorf("wait routine %q interrupted", r.name)
 		case <-timer.C:
+			// 超时，记录阻塞时间
 			r.mutex.Lock()
 			r.blockCost += time.Since(waitStart)
 			r.mutex.Unlock()
-			err = fmt.Errorf("wait routine %q timeout", r.name)
+			return fmt.Errorf("wait routine %q timeout (%v, mode: %s)",
+				r.name, effectiveTimeout, waitMode)
 		}
 	} else {
+		// 无限等待
 		select {
-		case <-r.signal:
+		case <-r.done:
 			// 正常完成，记录阻塞时间
 			r.mutex.Lock()
 			r.blockCost += time.Since(waitStart)
 			r.mutex.Unlock()
+			return nil
 		case <-i.Wait():
-			err = fmt.Errorf("wait routine %q interrupted", r.name)
-		default:
-			// 无超时设置，非阻塞检查
-			return fmt.Errorf("wait routine %q not finished yet", r.name)
+			return fmt.Errorf("wait routine %q interrupted", r.name)
 		}
 	}
-	return err
 }
 
 // BlockCost 方法用于获取等待的时间
 func (r *routine) BlockCost() time.Duration {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	return r.blockCost
 }
 

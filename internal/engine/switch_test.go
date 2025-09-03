@@ -116,6 +116,7 @@ func TestSwitchOperatro(t *testing.T) {
 			}
 				`,
 			assertFunc: func(res error, val *BeChangeValue) {
+				assert.NotNil(t, res)
 				assert.Equal(t, `duplicate switch case "changeValueTo1"`, res.Error())
 				assert.Equal(t, int64(0), val.Val)
 			},
