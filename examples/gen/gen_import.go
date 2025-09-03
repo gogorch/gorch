@@ -5,6 +5,5 @@ package gen_operators
 
 
 import (
-	_ "github.com/gogorch/gorch/examples/opa"
-	_ "github.com/gogorch/gorch/examples/opb"
+	_ "github.com/gogorch/gorch/examples/operators/opa"
 )

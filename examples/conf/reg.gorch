@@ -1,9 +1,6 @@
-REGISTER("github.com/gogorch"){
-	OPERATOR("gorch/examples/opa", "OperatorA0", "a0", 1)
-	OPERATOR("gorch/examples/opa", "OperatorA1", "a1", 2)
-	OPERATOR("gorch/examples/opb", "OperatorB0", "b0", 10)
-}
 
-REGISTER("github.com/gogorch"){
-	OPERATOR("gorch/examples/opb", "OperatorB1", "b1", 11)
+REGISTER("github.com/gogorch/gorch/examples/operators"){
+	OPERATOR("opa", "OperatorA0", "a", 1)
+	OPERATOR("opb", "OperatorB0", "b", 2)
+	OPERATOR("sleepop", "SleepOp", "SleepOp", 3)
 }

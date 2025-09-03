@@ -1,12 +1,12 @@
-
-START("test", route=["GET|HEAD /s", "GET /s1"], timeout=8s){
-	ON_FINISH() { a0(onfinish=true) }
+START("test"){
+	ON_FINISH() { a(onfinish=true) }
 
 	UNFOLD("test")
-	-> b0(changeTo=1)
-	-> b1(changeTo=12, WAIT("aa", timeout=10ms))
+	-> SleepOp(sleep=10ms)
+	-> b(changeTo=1)
+	-> b(changeTo=12, WAIT("aa", timeout=10ms))
 }
 
 FRAGMENT("test"){
-	@a0(fatal=true) -> GO(a1(changeTo=11), "aa")
+	@a(fatal=true) -> GO(a(changeTo=11), "aa")
 }
