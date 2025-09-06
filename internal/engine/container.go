@@ -33,6 +33,24 @@ func newContainer() *container {
 }
 
 func (cter *container) reset() {
+	// 【修复空指针】防止对象池回调时访问未初始化的 map
+	// 原来的问题：对象池在重置 container 时，map 字段可能为 nil，
+	// 直接调用 clear() 会导致 panic
+	if cter.instances == nil {
+		cter.instances = make(map[reflect.Type]reflect.Value)
+	}
+	if cter.routines == nil {
+		cter.routines = make(map[string]*routine)
+	}
+	
+	// 【修复竞态条件】使用互斥锁保护 map 操作，防止并发访问冲突
+	// 原来的问题：主线程在 releaseContainer() 中清理 map，
+	// 而 goroutine 同时在 container.getIns() 中读取 map，导致数据竞争
+	if cter.mutex != nil {
+		cter.mutex.Lock()
+		defer cter.mutex.Unlock()
+	}
+	
 	clear(cter.instances)
 	clear(cter.routines)
 	cter.mutex = pool.RWMutexPool.Get()
@@ -56,11 +74,17 @@ func releaseContainer(cter *container) {
 	// 释放容器中的协程对象
 	releaseRoutines(cter.routines)
 
-	// 释放互斥锁
+	// 【修复空指针】调整释放顺序，确保 reset() 在释放 mutex 之前执行
+	// 原来的问题：先释放 mutex，然后调用 reset()，但 reset() 需要使用 mutex，
+	// 导致访问已释放的 mutex 时出现空指针解引用
+	cter.reset()
+
+	// 【修复竞态条件】正确的互斥锁生命周期管理
+	// 释放当前的互斥锁
 	pool.RWMutexPool.Put(cter.mutex)
 
-	// 重置容器
-	cter.reset()
+	// 为下次使用准备新的互斥锁，避免对象池复用时的竞态条件
+	cter.mutex = pool.RWMutexPool.Get()
 
 	// 将容器放回对象池
 	containerPool.Put(cter)

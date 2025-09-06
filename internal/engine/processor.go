@@ -263,16 +263,22 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 		return func() {
 			defer func() {
 				nctx.waiter.Done()
-				nctx.putPool()
 			}()
 
 			if err := r.start(func() {
+				// 【修复空指针+竞态条件】
+				// 将 context 回收移动到这里，确保在 gp.processor.Execute(nctx) 完全执行完成后才回收
+				// 原来的问题：nctx.putPool() 在 defer 中过早执行，导致 context 被回收后，
+				// gp.processor.Execute(nctx) 访问 nctx.interrupt 等字段时出现空指针解引用
+				defer nctx.putPool() 
 				st := time.Now()
 				_ = gp.processor.Execute(nctx)
 				co := time.Since(st)
 				nctx.Logger.AddInfo(mlog.Duration("routine_"+r.name, co))
 			}); err != nil {
 				nctx.Logger.Error("routine execute error", mlog.Error("error", err))
+				// 【修复资源泄漏】错误情况下也要确保回收 context
+				nctx.putPool()
 			}
 		}
 	}(newCtx, b))

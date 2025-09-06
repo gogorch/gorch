@@ -133,10 +133,20 @@ func (r *routine) start(fn func()) (err error) {
 	go func() {
 		<-done
 		r.mutex.Lock()
+		defer r.mutex.Unlock()
 		r.stopAt = time.Now()
-		r.mutex.Unlock()
-		// 关闭done channel通知所有等待者
-		close(r.done)
+
+		// 【修复 panic: "close of closed channel"】
+		// 原来的问题：在高并发场景下，routine 对象可能被对象池复用，
+		// 导致同一个 r.done channel 被多个 goroutine 同时关闭，引发 panic
+		// 修复方案：使用 select 进行非阻塞检查，避免重复关闭已关闭的 channel
+		select {
+		case <-r.done:
+			// channel 已经关闭，无需再次关闭，避免 panic
+		default:
+			// channel 未关闭，安全关闭
+			close(r.done)
+		}
 	}()
 
 	return nil
