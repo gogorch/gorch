@@ -11,11 +11,7 @@ import (
 
 func TestRoutine(t *testing.T) {
 	t.Run("not_started", func(t *testing.T) {
-		r := &routine{
-			name:  "testRoutine",
-			done:  make(chan struct{}),
-			mutex: sync.RWMutex{},
-		}
+		r := newRoutine("testRoutine")
 
 		i := newInterrupt()
 
@@ -86,12 +82,7 @@ func TestRoutine(t *testing.T) {
 	})
 
 	t.Run("from_start_not_check_start", func(t *testing.T) {
-		// 创建一个 routine 实例
-		r := &routine{
-			name:  "testRoutine",
-			done:  make(chan struct{}),
-			mutex: sync.RWMutex{},
-		}
+		r := newRoutine("testRoutine")
 		i := newInterrupt()
 		// 等待过程中中断了
 		r.startAt = zeroTime
@@ -105,5 +96,74 @@ func TestRoutine(t *testing.T) {
 		}
 		err := r.wait(i, config)
 		assert.Equal(t, errors.New("wait routine \"testRoutine\" interrupted"), err)
+	})
+
+	t.Run("concurrent_routines", func(t *testing.T) {
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				r := newRoutine("testRoutine")
+				i := newInterrupt()
+				err := r.start(func() {
+					time.Sleep(time.Millisecond * 10)
+				})
+				assert.Nil(t, err)
+
+				config := &WaitConfig{
+					Timeout: time.Millisecond * 20,
+				}
+				err = r.wait(i, config)
+				assert.Nil(t, err)
+			}(i)
+		}
+		wg.Wait()
+	})
+
+	t.Run("block_cost_measurement", func(t *testing.T) {
+		r := newRoutine("testRoutine")
+		i := newInterrupt()
+
+		start := time.Now()
+		err := r.start(func() {
+			time.Sleep(time.Millisecond * 50)
+		})
+		assert.Nil(t, err)
+
+		config := &WaitConfig{
+			Timeout: time.Millisecond * 100,
+		}
+		err = r.wait(i, config)
+		assert.Nil(t, err)
+
+		blockCost := r.BlockCost()
+		actualCost := time.Since(start)
+		assert.True(t, blockCost > 0, "block cost should be positive")
+		assert.True(t, blockCost <= actualCost, "block cost should not exceed actual cost")
+	})
+
+	t.Run("routine_pool_reuse", func(t *testing.T) {
+		// Get routine from pool
+		r1 := newRoutine("testRoutine1")
+		routinePool.Put(r1)
+
+		// Get again should reuse the same instance
+		r2 := newRoutine("testRoutine2")
+		assert.Equal(t, r1, r2, "should reuse routine from pool")
+		assert.Equal(t, "testRoutine2", r2.name, "name should be updated")
+	})
+
+	t.Run("panic_recovery", func(t *testing.T) {
+		r := newRoutine("testRoutine")
+		assert.NotNil(t, r, "routine should not be nil")
+
+		err := r.start(func() {
+			panic("test panic") // 直接panic，不捕获
+		})
+		assert.NotNil(t, err, "should return error for panic")
+		if err != nil {
+			assert.Contains(t, err.Error(), "routine testRoutine execute panic: test panic")
+		}
 	})
 }

@@ -120,6 +120,7 @@ func (s *starterProcessor) Execute(ctx *Context) (err error) {
 	err = s.exedescProc.Execute(newCtx)
 
 	newCtx.waiter.Wait()
+	fmt.Println("____wait_final")
 	return
 }
 
@@ -270,7 +271,7 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 				// 将 context 回收移动到这里，确保在 gp.processor.Execute(nctx) 完全执行完成后才回收
 				// 原来的问题：nctx.putPool() 在 defer 中过早执行，导致 context 被回收后，
 				// gp.processor.Execute(nctx) 访问 nctx.interrupt 等字段时出现空指针解引用
-				defer nctx.putPool() 
+				defer nctx.putPool()
 				st := time.Now()
 				_ = gp.processor.Execute(nctx)
 				co := time.Since(st)

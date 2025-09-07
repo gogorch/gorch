@@ -119,37 +119,44 @@ func (r *routine) start(fn func()) (err error) {
 	// 在解锁后再执行函数，减少锁的持有时间
 	r.mutex.Unlock()
 
+	errChan := make(chan error, 1)
 	done := make(chan struct{}, 1)
+
 	go func() {
 		defer func() {
 			if er := recover(); er != nil {
-				err = fmt.Errorf("routine %s execute panic: %v", r.name, er)
+				errChan <- fmt.Errorf("routine %s execute panic: %v", r.name, er)
 			}
 			done <- struct{}{}
 		}()
 		fn()
 	}()
 
-	go func() {
-		<-done
+	// 等待函数执行完成或panic
+	select {
+	case err = <-errChan:
+		// 捕获到panic错误
 		r.mutex.Lock()
-		defer r.mutex.Unlock()
 		r.stopAt = time.Now()
-
-		// 【修复 panic: "close of closed channel"】
-		// 原来的问题：在高并发场景下，routine 对象可能被对象池复用，
-		// 导致同一个 r.done channel 被多个 goroutine 同时关闭，引发 panic
-		// 修复方案：使用 select 进行非阻塞检查，避免重复关闭已关闭的 channel
 		select {
 		case <-r.done:
-			// channel 已经关闭，无需再次关闭，避免 panic
 		default:
-			// channel 未关闭，安全关闭
 			close(r.done)
 		}
-	}()
-
-	return nil
+		r.mutex.Unlock()
+		return err
+	case <-done:
+		// 正常完成
+		r.mutex.Lock()
+		r.stopAt = time.Now()
+		select {
+		case <-r.done:
+		default:
+			close(r.done)
+		}
+		r.mutex.Unlock()
+		return nil
+	}
 }
 
 // wait 方法用于等待一个 routine 完成执行

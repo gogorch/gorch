@@ -2,6 +2,8 @@ package engine
 
 import (
 	"log"
+	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -244,4 +246,71 @@ func Test_getRoutine(t *testing.T) {
 
 	testRoutine1 := cter.getRoutine("test")
 	assert.Equal(t, testRoutine, testRoutine1)
+}
+
+func TestContainerConcurrentAccess(t *testing.T) {
+	cter := newContainer()
+	var wg sync.WaitGroup
+
+	// 先注册一些值
+	for i := 0; i < 100; i++ {
+		val := i
+		assert.Nil(t, cter.RegisterIns(&val, true))
+	}
+
+	// 并发获取并验证值在0-99范围内
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var val int
+			assert.Nil(t, cter.MutableIns(&val))
+			assert.True(t, val >= 0 && val < 100, "value should be in registered range")
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestContainerReset(t *testing.T) {
+	cter := newContainer()
+	a := 123
+	assert.Nil(t, cter.RegisterIns(&a, false))
+
+	// 重置容器
+	cter.reset()
+
+	// 验证实例已被清空
+	cter.mutex.RLock()
+	assert.Equal(t, 0, len(cter.instances))
+	cter.mutex.RUnlock()
+}
+
+func TestSetIns(t *testing.T) {
+	cter := newContainer()
+	typ := reflect.TypeOf(123)
+	val := reflect.ValueOf(123)
+
+	// 测试替换
+	assert.Nil(t, cter.setIns(typ, val, false))
+	assert.Nil(t, cter.setIns(typ, val, true))
+
+	// 测试不替换
+	err := cter.setIns(typ, val, false)
+	assert.Equal(t, "register error: duplicate type, error type: int", err.Error())
+}
+
+func TestContainerPoolReuse(t *testing.T) {
+	// 从池中获取容器
+	c1 := newContainer()
+	containerPool.Put(c1)
+
+	// 再次获取应该重用同一个实例
+	c2 := newContainer()
+	assert.Equal(t, c1, c2, "should reuse container from pool")
+
+	// 验证重置后的状态
+	c2.mutex.RLock()
+	assert.Equal(t, 0, len(c2.instances))
+	c2.mutex.RUnlock()
 }

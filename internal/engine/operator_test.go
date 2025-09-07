@@ -245,7 +245,7 @@ func TestGoAndWaitOperator(t *testing.T) {
 				-> SleepOp(sleep=10ms) // 其他算子执行耗时
 				-> NothingOp(WAIT("goOperator", totalTimeout=70ms)) }`,
 			assertFunc: func(res error, val *BeChangeValue) {
-				assert.Equal(t, nil, res)
+				assert.Nil(t, res)
 				assert.Equal(t, int64(10), val.Val)
 			},
 		})
