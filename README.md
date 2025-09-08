@@ -213,7 +213,7 @@ Gorch支持强大的异步执行模式，允许任务在后台运行，提高整
 START("async_demo") {
     // 启动后台任务
     GO(SlowNetworkCall(), "network_task")
-    GO(DatabaseQuery(), "db_task")
+    -> GO(DatabaseQuery(), "db_task")
 
     // 立即执行其他任务
     -> FastLocalOperation()
@@ -239,8 +239,8 @@ START("async_demo") {
 ```gorch
 START("wait_modes") {
     GO(SlowTask(), "task1")
-    GO(SlowTask(), "task2")
-    GO(SlowTask(), "task3")
+    -> GO(SlowTask(), "task2")
+    -> GO(SlowTask(), "task3")
 
     // 立即执行其他操作，耗时10秒
     -> SomeOtherWork(duration=10s)
@@ -351,8 +351,6 @@ func (v *UserValidator) Execute(ctx *gorch.Context) error {
         return fmt.Errorf("invalid user id: %d", userId)
     }
 
-    // 设置上下文数据供后续算子使用
-    ctx.Set("validated_user_id", userId)
     return nil
 }
 ```
@@ -545,8 +543,6 @@ go build -o gorchc ./gorchc
 
 ### 示例项目
 - [基础示例](examples/) - 展示核心功能的使用
-- [电商订单处理](examples/ecommerce/) - 复杂业务流程示例
-- [数据处理管道](examples/pipeline/) - 数据处理场景应用
 
 ### 社区
 - [GitHub Issues](https://github.com/gogorch/gorch/issues) - 问题反馈和功能请求
@@ -562,9 +558,7 @@ go build -o gorchc ./gorchc
 - ✅ 完整的文档和示例
 
 ### 路线图
-- 🔄 分布式执行支持
 - 🔄 可视化流程编辑器
-- 🔄 更多IDE支持 (IntelliJ, Vim)
 - 🔄 云原生部署支持
 
 ## 📄 许可证
