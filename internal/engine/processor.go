@@ -101,8 +101,6 @@ func (s *starterProcessor) Execute(ctx *Context) (err error) {
 	defer func() {
 		if err := recover(); err != nil {
 			fields := RecoverPanic(err)
-			fields = append(fields,
-				mlog.String("panic", fmt.Sprintf("%v", err)))
 			ctx.Logger.Error("engineExecutePanic", fields...)
 		}
 	}()
@@ -120,7 +118,6 @@ func (s *starterProcessor) Execute(ctx *Context) (err error) {
 	err = s.exedescProc.Execute(newCtx)
 
 	newCtx.waiter.Wait()
-	fmt.Println("____wait_final")
 	return
 }
 
@@ -412,7 +409,7 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 			err = fmt.Errorf("operator %s execute panic", op.Name)
 			fields := RecoverPanic(er)
 			fields = append(fields, mlog.String("panicOperator", op.Name))
-			ctx.Logger.Error("operator execute panic", fields...)
+			ctx.Logger.Error("operatorExecutePanic", fields...)
 		}
 
 		if err != nil {

@@ -48,8 +48,9 @@ const (
 	KindUint8
 	KindUintptr
 	KindReflect
+	KindReflectType
 	KindError
-	KindDefer
+	KindAny
 )
 
 var kindStrings = []string{
@@ -121,4 +122,8 @@ func Uint32(key string, value uint32) LogValue          { return &logValue{key, 
 func Uint16(key string, value uint16) LogValue          { return &logValue{key, value, KindUint16} }
 func Uint8(key string, value uint8) LogValue            { return &logValue{key, value, KindUint8} }
 func Reflect(key string, value reflect.Value) LogValue  { return &logValue{key, value, KindReflect} }
-func Error(key string, value error) LogValue            { return &logValue{key, value, KindError} }
+func ReflectType(key string, value reflect.Type) LogValue {
+	return &logValue{key, value, KindReflectType}
+}
+func Error(key string, value error) LogValue { return &logValue{key, value, KindError} }
+func Any(key string, value any) LogValue     { return &logValue{key, value, KindAny} }

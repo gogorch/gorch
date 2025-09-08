@@ -2,10 +2,10 @@ package engine
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 
+	"github.com/gogorch/gorch/mlog"
 	"github.com/gogorch/gorch/pool"
 )
 
@@ -42,7 +42,7 @@ func (cter *container) reset() {
 	if cter.routines == nil {
 		cter.routines = make(map[string]*routine)
 	}
-	
+
 	// 【修复竞态条件】使用互斥锁保护 map 操作，防止并发访问冲突
 	// 原来的问题：主线程在 releaseContainer() 中清理 map，
 	// 而 goroutine 同时在 container.getIns() 中读取 map，导致数据竞争
@@ -50,7 +50,7 @@ func (cter *container) reset() {
 		cter.mutex.Lock()
 		defer cter.mutex.Unlock()
 	}
-	
+
 	clear(cter.instances)
 	clear(cter.routines)
 	cter.mutex = pool.RWMutexPool.Get()
@@ -92,7 +92,7 @@ func releaseContainer(cter *container) {
 
 // releaseInstances 释放容器中的实例对象，若对象实现了 Releasable 接口，则调用其 Release 方法。
 func releaseInstances(instances map[reflect.Type]reflect.Value) {
-	for _, ins := range instances {
+	for t, ins := range instances {
 		// 检查值是否有效且不是零值
 		if !ins.IsValid() || (ins.Kind() == reflect.Ptr && ins.IsNil()) {
 			continue
@@ -102,7 +102,13 @@ func releaseInstances(instances map[reflect.Type]reflect.Value) {
 				func() {
 					defer func() {
 						if err := recover(); err != nil {
-							log.Printf("[releaseInstances] panic when releasing instance: %v\n", err)
+							fields := RecoverPanic(err)
+							fields = append(fields,
+								mlog.Any("err", err),
+								mlog.Reflect("ins", ins),
+								mlog.ReflectType("type", t))
+
+							globalLogger.Error("panicWhenReleasingInstance", fields...)
 						}
 					}()
 					p.Release()

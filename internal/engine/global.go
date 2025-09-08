@@ -14,6 +14,9 @@ var (
 	// goRoutinePool goroutine池对象
 	goRoutinePool pool.GoRoutinePool = new(pool.NotPool)
 
+	// 全局日志对象，默认使用printLogger
+	globalLogger mlog.Logger = printLogger
+
 	zeroTime = time.Time{}
 )
 
@@ -36,4 +39,8 @@ func clean() {
 		namesMap: make(map[string]OperatorFactory),
 		seqsMap:  make(map[string]string),
 	}
+}
+
+func SetDefaultLogger(l mlog.Logger) {
+	globalLogger = l
 }

@@ -18,8 +18,18 @@ func RecoverPanic(msg any) []mlog.LogValue {
 	trace := make([]byte, 4096)
 	n := runtime.Stack(trace[:], false)
 
+	// 过滤掉 cover.go 的堆栈行
+	lines := bytes.Split(trace[:n], []byte("\n"))
+	filtered := make([][]byte, 0, len(lines))
+	for _, line := range lines {
+		if !bytes.Contains(line, []byte("recover.go")) {
+			filtered = append(filtered, line)
+		}
+	}
+	cleanStack := bytes.Join(filtered, []byte("\n"))
+
 	return []mlog.LogValue{
-		mlog.String("executePanic", fmt.Sprint(msg)),
-		mlog.String("stack", string(bytes.ReplaceAll(trace[:n], []byte("\n"), []byte("\\n")))),
+		mlog.String("panic", fmt.Sprint(msg)),
+		mlog.String("stack", string(cleanStack)),
 	}
 }

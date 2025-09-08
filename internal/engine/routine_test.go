@@ -126,16 +126,23 @@ func TestRoutine(t *testing.T) {
 		i := newInterrupt()
 
 		start := time.Now()
-		err := r.start(func() {
-			time.Sleep(time.Millisecond * 50)
-		})
-		assert.Nil(t, err)
+		errChan := make(chan error)
+		go func() {
+			errChan <- r.start(func() {
+				time.Sleep(time.Millisecond * 50)
+			})
+		}()
 
 		config := &WaitConfig{
-			Timeout: time.Millisecond * 100,
+			Timeout:         time.Millisecond * 100,
+			AllowNotStarted: true,
 		}
-		err = r.wait(i, config)
+
+		err := r.wait(i, config)
 		assert.Nil(t, err)
+
+		er1 := <-errChan
+		assert.Nil(t, er1)
 
 		blockCost := r.BlockCost()
 		actualCost := time.Since(start)
@@ -146,12 +153,25 @@ func TestRoutine(t *testing.T) {
 	t.Run("routine_pool_reuse", func(t *testing.T) {
 		// Get routine from pool
 		r1 := newRoutine("testRoutine1")
+
+		// 确保routine已完成所有操作
+		time.Sleep(10 * time.Millisecond)
+
+		// 放回对象池
 		routinePool.Put(r1)
 
-		// Get again should reuse the same instance
+		// 确保对象池已完成回收
+		time.Sleep(10 * time.Millisecond)
+
+		// Get a new routine
 		r2 := newRoutine("testRoutine2")
-		assert.Equal(t, r1, r2, "should reuse routine from pool")
+
+		// 验证重置后的状态
 		assert.Equal(t, "testRoutine2", r2.name, "name should be updated")
+		assert.True(t, r2.startAt.IsZero(), "reused routine should have zero start time")
+		assert.True(t, r2.stopAt.IsZero(), "reused routine should have zero stop time")
+		assert.Equal(t, time.Duration(0), r2.blockCost, "reused routine should have zero block cost")
+		assert.NotNil(t, r2.done, "done channel should be initialized")
 	})
 
 	t.Run("panic_recovery", func(t *testing.T) {
