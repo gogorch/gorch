@@ -17,9 +17,9 @@ type WaitDirective struct {
 	// TotalTimeout 总共等待的时间，从Routine开始算起
 	TotalTimeout time.Duration
 
-	// NotCheckStart 是否检查routine是否已经启动
+	// AllowUnstarted 是否允许等待未启动的routine
 	// 如果为false，在Wait时，如果还没启动直接返回；否则会等待routine启动
-	NotCheckStart bool
+	AllowUnstarted bool
 
 	// 是否忽略错误
 	IgnoreError bool
@@ -51,8 +51,8 @@ func (bws *WaitDirective) AcceptArgsStmt(args *ArgsStmt) error {
 		bws.TotalTimeout = v.DurationValue[0]
 	}
 
-	if v, ok := args.ArgMap["notCheckStart"]; ok && len(v.BooleanValue) > 0 {
-		bws.NotCheckStart = v.BooleanValue[0]
+	if v, ok := args.ArgMap["allowUnstarted"]; ok && len(v.BooleanValue) > 0 {
+		bws.AllowUnstarted = v.BooleanValue[0]
 	}
 
 	return nil

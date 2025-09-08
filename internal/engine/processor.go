@@ -303,9 +303,9 @@ func (wp *waitProcessor) Execute(ctx *Context) error {
 
 	// 创建等待配置
 	config := &WaitConfig{
-		Timeout:         wp.Timeout,
-		TotalTimeout:    wp.TotalTimeout,
-		AllowNotStarted: wp.NotCheckStart,
+		Timeout:        wp.Timeout,
+		TotalTimeout:   wp.TotalTimeout,
+		AllowUnstarted: wp.AllowUnstarted,
 	}
 
 	err := r.wait(ctx.interrupt, config)

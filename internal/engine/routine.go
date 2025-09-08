@@ -18,10 +18,10 @@ type WaitConfig struct {
 	// 如果设置了此值，会覆盖Timeout的行为
 	TotalTimeout time.Duration
 
-	// AllowNotStarted 是否允许等待未启动的routine
+	// AllowUnstarted 是否允许等待未启动的routine
 	// 如果为false，等待未启动的routine会立即返回错误
 	// 如果为true，会等待routine启动后再开始计时
-	AllowNotStarted bool
+	AllowUnstarted bool
 }
 
 // WaitMode 等待模式枚举
@@ -73,8 +73,8 @@ func (wc *WaitConfig) GetEffectiveTimeout() time.Duration {
 // 在dsl中，使用 `GO(operator, "name")` 发起一次异步执行
 // 发起之后，就可以通过 `WAIT` 指令等待routine的结果。示例：`operator(arg=1, WAIT("name"))`
 type Routine interface {
-	// BlockCost 方法用于获取等待routine完成而阻塞当前goroutine的耗时
-	BlockCost() time.Duration
+	// WaitDuration 方法用于获取等待routine完成而阻塞当前goroutine的耗时
+	WaitDuration() time.Duration
 }
 
 type routine struct {
@@ -88,8 +88,8 @@ type routine struct {
 	startAt time.Time
 	// stopAt routine结束执行的时间
 	stopAt time.Time
-	// blockCost routine等待阻塞的时间
-	blockCost time.Duration
+	// waitDuration routine等待阻塞的时间
+	waitDuration time.Duration
 }
 
 var (
@@ -97,7 +97,7 @@ var (
 		r.name = ""
 		r.startAt = zeroTime
 		r.stopAt = zeroTime
-		r.blockCost = 0
+		r.waitDuration = 0
 		r.done = make(chan struct{})
 	})
 )
@@ -180,7 +180,7 @@ func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
 	}
 
 	// 检查routine是否已经开始执行
-	if r.startAt.IsZero() && !config.AllowNotStarted {
+	if r.startAt.IsZero() && !config.AllowUnstarted {
 		r.mutex.RUnlock()
 		return fmt.Errorf("routine %q not started", r.name)
 	}
@@ -228,7 +228,7 @@ func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
 		case <-r.done:
 			// 正常完成，记录阻塞时间
 			r.mutex.Lock()
-			r.blockCost += time.Since(waitStart)
+			r.waitDuration += time.Since(waitStart)
 			r.mutex.Unlock()
 			return nil
 		case <-i.Wait():
@@ -236,7 +236,7 @@ func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
 		case <-timer.C:
 			// 超时，记录阻塞时间
 			r.mutex.Lock()
-			r.blockCost += time.Since(waitStart)
+			r.waitDuration += time.Since(waitStart)
 			r.mutex.Unlock()
 			return fmt.Errorf("wait routine %q timeout (%v, mode: %s)",
 				r.name, effectiveTimeout, waitMode)
@@ -247,7 +247,7 @@ func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
 		case <-r.done:
 			// 正常完成，记录阻塞时间
 			r.mutex.Lock()
-			r.blockCost += time.Since(waitStart)
+			r.waitDuration += time.Since(waitStart)
 			r.mutex.Unlock()
 			return nil
 		case <-i.Wait():
@@ -256,11 +256,11 @@ func (r *routine) wait(i *interrupt, config *WaitConfig) (err error) {
 	}
 }
 
-// BlockCost 方法用于获取等待的时间
-func (r *routine) BlockCost() time.Duration {
+// WaitDuration 方法用于获取等待的时间
+func (r *routine) WaitDuration() time.Duration {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	return r.blockCost
+	return r.waitDuration
 }
 
 var _ Routine = (*routine)(nil)

@@ -17,8 +17,7 @@ func TestRoutine(t *testing.T) {
 
 		// 模拟未开始，不允许等待未启动的routine
 		config := &WaitConfig{
-			Timeout:         time.Second,
-			AllowNotStarted: false,
+			Timeout: time.Second,
 		}
 		err := r.wait(i, config)
 		assert.Equal(t, errors.New("routine \"testRoutine\" not started"), err)
@@ -134,8 +133,8 @@ func TestRoutine(t *testing.T) {
 		}()
 
 		config := &WaitConfig{
-			Timeout:         time.Millisecond * 100,
-			AllowNotStarted: true,
+			Timeout:        time.Millisecond * 100,
+			AllowUnstarted: true,
 		}
 
 		err := r.wait(i, config)
@@ -144,10 +143,10 @@ func TestRoutine(t *testing.T) {
 		er1 := <-errChan
 		assert.Nil(t, er1)
 
-		blockCost := r.BlockCost()
+		waitDuration := r.WaitDuration()
 		actualCost := time.Since(start)
-		assert.True(t, blockCost > 0, "block cost should be positive")
-		assert.True(t, blockCost <= actualCost, "block cost should not exceed actual cost")
+		assert.True(t, waitDuration > 0, "block cost should be positive")
+		assert.True(t, waitDuration <= actualCost, "block cost should not exceed actual cost")
 	})
 
 	t.Run("routine_pool_reuse", func(t *testing.T) {
@@ -170,7 +169,7 @@ func TestRoutine(t *testing.T) {
 		assert.Equal(t, "testRoutine2", r2.name, "name should be updated")
 		assert.True(t, r2.startAt.IsZero(), "reused routine should have zero start time")
 		assert.True(t, r2.stopAt.IsZero(), "reused routine should have zero stop time")
-		assert.Equal(t, time.Duration(0), r2.blockCost, "reused routine should have zero block cost")
+		assert.Equal(t, time.Duration(0), r2.waitDuration, "reused routine should have zero block cost")
 		assert.NotNil(t, r2.done, "done channel should be initialized")
 	})
 

@@ -232,7 +232,7 @@ START("async_demo") {
 |------|------|------|
 | `timeout` | 等待超时时间（从开始等待时计算） | `timeout=30s` |
 | `totalTimeout` | 总超时时间（从任务开始执行时计算） | `totalTimeout=60s` |
-| `notCheckStart` | 允许等待未启动的任务 | `notCheckStart=true` |
+| `allowUnstarted` | 允许等待未启动的任务 | `allowUnstarted=true` |
 
 **等待模式对比：**
 
