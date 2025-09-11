@@ -63,7 +63,7 @@ type Executor interface {
 	// 设置打印算子耗时的阈值
 	// 默认情况下，只会记录算子的序号(或名称到日志)，表示该算子执行过
 	// 当算子的耗时大于这个阈值，才会记录算子的耗时到日志
-	SetCostThreshold(t time.Duration)
+	SetLogThreshold(t time.Duration)
 
 	// 执行算子
 	Execute(ctx context.Context) error
@@ -81,7 +81,7 @@ type executor struct {
 	logOperatorName bool
 	// 打印算子耗时的阈值
 	// 当算子的耗时大于这个阈值，才会记录算子的耗时到日志
-	costThreshold time.Duration
+	logThreshold time.Duration
 
 	p Processor
 }
@@ -92,7 +92,7 @@ var (
 		t.timeout = 0
 		t.recorder = nil
 		t.logOperatorName = false
-		t.costThreshold = 0
+		t.logThreshold = defaultLogThreshold
 		t.p = nil
 	})
 )
@@ -129,8 +129,8 @@ func (s *executor) SetLogOperatorName() {
 	s.logOperatorName = true
 }
 
-func (s *executor) SetCostThreshold(t time.Duration) {
-	s.costThreshold = t
+func (s *executor) SetLogThreshold(t time.Duration) {
+	s.logThreshold = t
 }
 
 func (s *executor) Execute(ctx context.Context) error {
@@ -141,23 +141,20 @@ func (s *executor) Execute(ctx context.Context) error {
 	rctx.ctx = ctx
 	rctx.recorder = s.recorder
 	if rctx.recorder == nil {
-		rctx.recorder = recorder.NewRecorder()
+		rctx.recorder = recorder.New()
 	}
 	if s.logOperatorName {
-		rctx.recorder.EnableLogOperatorName()
-	}
-	if s.costThreshold > 0 {
-		rctx.recorder.SetCostThreshold(s.costThreshold)
+		rctx.recorder.UseOperatorName(true)
 	}
 
-	rctx.recorder.StartRecording()
+	rctx.recorder.Start()
 	defer func() {
-		rctx.recorder.StopRecording()
+		rctx.recorder.Stop()
 
-		rs := rctx.recorder.GetOperatorRecords()
-		rctx.Logger.AddInfo(mlog.String("record", rs))
-		rctx.Logger.AddInfo(mlog.String("total", rctx.recorder.GetTotalCost()))
-		rctx.recorder.Release()
+		rs := rctx.recorder.Report()
+		rctx.Logger.AddInfo(mlog.String("record", rs.Format(s.logThreshold)))
+		rctx.Logger.AddInfo(mlog.String("total", rs.TotalCost.String()))
+		rctx.recorder.Reset()
 
 		releaseContext(rctx)
 		executorPool.Put(s)

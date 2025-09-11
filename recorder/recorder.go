@@ -8,174 +8,147 @@ import (
 	"github.com/gogorch/gorch/pool"
 )
 
-// Recorder 算子执行结果记录器
+// Recorder 提供算子级执行记录能力
 type Recorder interface {
-	// EnableLogOperatorName 记录算子名称到日志中
-	EnableLogOperatorName()
+	// WithOperatorName 设置是否在日志中使用算子名称而非序号
+	UseOperatorName(bool) Recorder
 
-	// CostThreshold 记录算子耗时的分界点，大于这个耗时就会记录算子耗时，否则算子不记录耗时
-	// 你可以修改这个全局变量来改变行为
-	SetCostThreshold(time.Duration)
+	// Start 开始一次引擎执行记录
+	Start()
+	// Stop 结束当前引擎执行记录
+	Stop()
+	// Elapsed 返回当前已执行耗时
+	Elapsed() time.Duration
 
-	// StartRecording 开始记录引擎执行
-	StartRecording()
+	// Record 生成一个算子记录句柄，调用返回的 Done 函数即完成记录
+	Record(name, seq string) Done
 
-	// StopRecording 引擎执行结束
-	StopRecording()
-
-	// RecordOperator 开始记录算子执行
-	// 返回一个函数，当算子执行结束时，调用这个函数，记录算子执行结果
-	RecordOperator(name string, seq string) func(int)
-
-	// ElapsedTime 返回从开始执行到现在的时间
-	ElapsedTime() time.Duration
-
-	// GetOperatorRecords 返回算子执行记录的字符串
-	// 字符串格式：算子名称,算子开始执行时间,算子执行耗时,算子执行状态
-	// 如果算子执行成功，那么默认状态码为0，为0时不记录日志；否则状态码为算子执行返回的状态码
-	// 如果算子的执行时间小于CostThreshold，那么不记录算子的执行时间
-	// 默认CostThreshold为100微秒
-	// 多个算子执行记录之间默认用 | 分隔
-	GetOperatorRecords() string
-
-	// GetTotalCost 返回引擎执行总耗时
-	GetTotalCost() string
-
-	// Release 回收对象到对象池
-	Release()
+	// Report 生成本次执行报告
+	Report() Report
+	// Reset 回收对象到池，重置状态以便复用
+	Reset()
 }
+
+// Done 用于完成单个算子记录
+type Done func(status int)
+
+// Report 提供只读的执行报告
+type Report struct {
+	TotalCost time.Duration
+	Operators []operatorSnapshot
+}
+
+// OperatorRecord 单条算子记录
+type OperatorRecord struct {
+	Name     string
+	StartOff time.Duration
+	Cost     time.Duration
+	Status   int
+}
+
+/* 实现部分 */
 
 type recorder struct {
-	mutex sync.Mutex
+	logName bool
+	start   time.Time
+	total   time.Duration
 
-	// 日志里记录执行的算子名称
-	logOperatorName bool
-	// 打印算子耗时的阈值，当算子的耗时大于这个阈值，才会记录算子的耗时到日志
-	costThreshold time.Duration
-
-	// 开始执行时间
-	startTime time.Time
-	// 总执行时间
-	cost time.Duration
-
-	// ors 算子执行记录
-	ors []*operatorRecorder
+	// 无锁化热点路径：先写本地缓存，再一次性合并
+	localOps []operatorSnapshot
+	mu       sync.Mutex
 }
 
-type operatorRecorder struct {
-	// name 算子名称
-	name string
-	// startOff 算子开始执行时间
+type operatorSnapshot struct {
+	name     string
 	startOff time.Duration
-	// cost 算子执行耗时
-	cost time.Duration
-	// status 算子执行返回的状态码
-	status int
+	cost     time.Duration
+	status   int
 }
 
 var (
-	zeroTime = time.Time{}
-
-	operatorRecorderSlicePool = pool.NewSlicePool[*operatorRecorder](0, 10240)
-
 	recorderPool = pool.NewObjectPool(func(r *recorder) {
-		r.startTime = zeroTime
-		r.costThreshold = time.Microsecond * 100
-		r.ors = operatorRecorderSlicePool.Get()
-		r.ors = r.ors[:0]
-	})
-
-	operatorRecorderPool = pool.NewObjectPool(func(r *operatorRecorder) {
-		r.name = ""
-		r.startOff = 0
-		r.cost = 0
-		r.status = 0
+		r.localOps = make([]operatorSnapshot, 0, 128)
 	})
 )
 
-func NewRecorder() Recorder {
-	r := recorderPool.Get()
+// New 从池中获取一个 Recorder
+func New() Recorder { return recorderPool.Get() }
+
+func (r *recorder) UseOperatorName(on bool) Recorder {
+	r.logName = on
 	return r
 }
 
-func (r *recorder) StartRecording() {
-	r.startTime = time.Now()
+func (r *recorder) Start() {
+	r.start = time.Now()
 }
 
-func (r *recorder) RecordOperator(name string, seq string) func(int) {
+func (r *recorder) Stop() {
+	r.total = time.Since(r.start)
+}
+
+func (r *recorder) Elapsed() time.Duration {
+	return time.Since(r.start)
+}
+
+func (r *recorder) Record(name, seq string) Done {
 	start := time.Now()
-	return func(i int) {
-		cost := time.Since(start)
-		or := operatorRecorderPool.Get()
-		or.name = name
-		if !r.logOperatorName {
-			or.name = seq
+	key := seq
+	if r.logName {
+		key = name
+	}
+	return func(status int) {
+		snap := operatorSnapshot{
+			name:     key,
+			startOff: time.Since(r.start),
+			cost:     time.Since(start),
+			status:   status,
 		}
-		or.startOff = time.Since(r.startTime)
-		or.cost = cost
-		or.status = i
-		r.mutex.Lock()
-		r.ors = append(r.ors, or)
-		r.mutex.Unlock()
+		r.mu.Lock()
+		r.localOps = append(r.localOps, snap)
+		r.mu.Unlock()
 	}
 }
 
-func (r *recorder) EnableLogOperatorName() {
-	r.logOperatorName = true
+func (r *recorder) Report() Report {
+	return Report{
+		TotalCost: r.total,
+		Operators: r.localOps,
+	}
 }
 
-func (r *recorder) SetCostThreshold(t time.Duration) {
-	r.costThreshold = t
+func (r *recorder) Reset() {
+	// 回收前重置状态
+	r.localOps = r.localOps[:0]
+	r.total = 0
+	r.start = time.Time{}
+	recorderPool.Put(r)
 }
 
-func (r *recorder) ElapsedTime() time.Duration {
-	return time.Since(r.startTime)
-}
-
-func (r *recorder) StopRecording() {
-	r.cost = time.Since(r.startTime)
-}
-
-func (r *recorder) GetOperatorRecords() string {
+// Format 将 Report 格式化为字符串，避免每次分配 bytes.Buffer
+func (rep Report) Format(threshold time.Duration) string {
 	buf := pool.BytesBufferPool.Get()
 	defer pool.BytesBufferPool.Put(buf)
-	for i, or := range r.ors {
-		buf.WriteString(or.name)
-		if or.cost > r.costThreshold {
+
+	for i, op := range rep.Operators {
+		buf.WriteString(op.name)
+		if op.cost > threshold {
 			buf.WriteString(",")
-			buf.WriteString(durationToMillStr(or.startOff))
+			buf.WriteString(durationToMillStr(op.startOff))
 			buf.WriteString(",")
-			buf.WriteString(durationToMillStr(or.cost))
+			buf.WriteString(durationToMillStr(op.cost))
 		}
-		if or.status != 0 {
+		if op.status != 0 {
 			buf.WriteString(",")
-			buf.WriteString(strconv.Itoa(or.status))
+			buf.WriteString(strconv.Itoa(op.status))
 		}
-		if i != len(r.ors)-1 {
+		if i != len(rep.Operators)-1 {
 			buf.WriteString("|")
 		}
 	}
-
 	return buf.String()
 }
 
-// durationToMillStr 将 time.Duration 转换为毫秒的小数形式，并返回字符串
 func durationToMillStr(d time.Duration) string {
-	ms := float64(d) / 1e6                     // 将Duration转换为毫秒
-	return strconv.FormatFloat(ms, 'f', 3, 64) // 格式化为字符串，保留三位小数
-}
-
-func (r *recorder) GetTotalCost() string {
-	return durationToMillStr(r.cost)
-}
-
-func (r *recorder) Release() {
-	if r == nil {
-		return
-	}
-
-	for _, or := range r.ors {
-		operatorRecorderPool.Put(or)
-	}
-	recorderPool.Put(r)
+	return strconv.FormatFloat(float64(d)/1000000, 'f', 2, 64) + "ms"
 }

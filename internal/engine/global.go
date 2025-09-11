@@ -18,6 +18,8 @@ var (
 	globalLogger mlog.Logger = printLogger
 
 	zeroTime = time.Time{}
+
+	defaultLogThreshold = time.Microsecond * 100
 )
 
 // SetGoroutinePool 允许从外部设置一个goroutine池对象
@@ -43,4 +45,10 @@ func clean() {
 
 func SetDefaultLogger(l mlog.Logger) {
 	globalLogger = l
+}
+
+func SetDefaultCostThreshold(d time.Duration) {
+	if d > 0 {
+		defaultLogThreshold = d
+	}
 }

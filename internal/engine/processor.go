@@ -112,7 +112,7 @@ func (s *starterProcessor) Execute(ctx *Context) (err error) {
 			}
 		}
 
-		newCtx.putPool()
+		newCtx.release()
 	}()
 
 	err = s.exedescProc.Execute(newCtx)
@@ -148,7 +148,7 @@ func (sp *serialProcessor) Prepare() error {
 
 func (sp *serialProcessor) Execute(ctx *Context) (err error) {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 
 	for _, processor := range sp.processors {
 		if ctx.Exited() {
@@ -183,7 +183,7 @@ func (sp *skipProcessor) Prepare() error {
 
 func (sp *skipProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 
 	ret := sp.processor.Execute(newCtx)
 	ctx.skipSerial = newCtx.skipSerial
@@ -219,7 +219,7 @@ func (cp *concurrentProcessor) Prepare() error {
 func (cp *concurrentProcessor) Execute(ctx *Context) error {
 	g := &sync.WaitGroup{}
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 
 	for _, processor := range cp.processors {
 		g.Add(1)
@@ -266,9 +266,9 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 			if err := r.start(func() {
 				// 【修复空指针+竞态条件】
 				// 将 context 回收移动到这里，确保在 gp.processor.Execute(nctx) 完全执行完成后才回收
-				// 原来的问题：nctx.putPool() 在 defer 中过早执行，导致 context 被回收后，
+				// 原来的问题：nctx.release() 在 defer 中过早执行，导致 context 被回收后，
 				// gp.processor.Execute(nctx) 访问 nctx.interrupt 等字段时出现空指针解引用
-				defer nctx.putPool()
+				defer nctx.release()
 				st := time.Now()
 				_ = gp.processor.Execute(nctx)
 				co := time.Since(st)
@@ -276,7 +276,7 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 			}); err != nil {
 				nctx.Logger.Error("routine execute error", mlog.Error("error", err))
 				// 【修复资源泄漏】错误情况下也要确保回收 context
-				nctx.putPool()
+				nctx.release()
 			}
 		}
 	}(newCtx, b))
@@ -333,7 +333,7 @@ func (ofp *onFinishProcessor) Prepare() error {
 
 func (ofp *onFinishProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 	return ofp.processor.Execute(newCtx)
 }
 
@@ -399,11 +399,11 @@ func (op *operatorProcessor) Prepare() (err error) {
 }
 
 func (op *operatorProcessor) Execute(ctx *Context) (err error) {
-	endRecord := ctx.recorder.RecordOperator(op.Name, op.operatorSeq)
+	done := ctx.recorder.Record(op.Name, op.operatorSeq)
 	var statusCode int
 
 	defer func() {
-		endRecord(statusCode)
+		done(statusCode)
 
 		if er := recover(); er != nil {
 			err = fmt.Errorf("operator %s execute panic", op.Name)
@@ -430,7 +430,7 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 	newCtx := ctx.clone()
 	defer func() {
 		ctx.skipSerial = newCtx.skipSerial
-		newCtx.putPool()
+		newCtx.release()
 	}()
 	newCtx.args = op.args
 	newCtx.switchCase = ctx.switchCase
@@ -488,7 +488,8 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		statusCode = status.code
 		if status.fatal {
 			if op.OperatorStmt.IgnoreError {
-				ctx.Logger.Info("operator execute return fatal error, but ignore", mlog.String("operator", op.Name), mlog.Error("error", err))
+				ctx.Logger.Info("operator execute return fatal error, but ignore",
+					mlog.String("operator", op.Name), mlog.Error("error", err))
 				err = nil
 				return
 			}
@@ -532,7 +533,7 @@ func (wp *switchProcessor) Prepare() error {
 
 func (sp *switchProcessor) Execute(ctx *Context) error {
 	newCtx0 := ctx.clone()
-	defer newCtx0.putPool()
+	defer newCtx0.release()
 
 	choicesCases := make([]Processor, 0, len(sp.switchCases))
 	checkCaseDup := make(map[string]struct{}, len(sp.switchCases))
@@ -565,14 +566,14 @@ func (sp *switchProcessor) Execute(ctx *Context) error {
 		return fmt.Errorf("switch %q no matching switch case found", sp.SwitchDirective.OperatorStmt.Name)
 	} else if len(choicesCases) == 1 {
 		newCtx1 := ctx.clone()
-		defer newCtx1.putPool()
+		defer newCtx1.release()
 		return choicesCases[0].Execute(newCtx1)
 	}
 
 	wait := &sync.WaitGroup{}
 
 	newCtx2 := ctx.clone()
-	defer newCtx2.putPool()
+	defer newCtx2.release()
 
 	for _, cp := range choicesCases {
 		if ctx.Exited() {
@@ -614,7 +615,7 @@ func (scp *switchCaseProcessor) Prepare() error {
 
 func (scp *switchCaseProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 	return scp.processor.Execute(newCtx)
 }
 
@@ -637,7 +638,7 @@ func (up *unfoldProcessor) Prepare() error {
 
 func (up *unfoldProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 	return up.processor.Execute(newCtx)
 }
 
@@ -661,12 +662,12 @@ func (wl *wrapLayer) Prepare() error {
 
 func (wl *wrapLayer) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 
 	if wl.next != nil {
 		newCtx.nextWrap = func() error {
 			newCtx := ctx.clone()
-			defer newCtx.putPool()
+			defer newCtx.release()
 			return wl.next.Execute(newCtx)
 		}
 	}
@@ -703,7 +704,7 @@ func (wp *wrapProcessor) Prepare() error {
 
 func (wp *wrapProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 	return wp.processor.Execute(newCtx)
 }
 
@@ -725,6 +726,6 @@ func (fp *fragmentProcessor) Prepare() error {
 
 func (fp *fragmentProcessor) Execute(ctx *Context) error {
 	newCtx := ctx.clone()
-	defer newCtx.putPool()
+	defer newCtx.release()
 	return fp.processor.Execute(newCtx)
 }

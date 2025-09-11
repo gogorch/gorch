@@ -98,9 +98,9 @@ func (ctx *Context) reset() {
 	ctx.switchCase = nil
 }
 
-// putPool 将当前Context对象放回对象池，请注意，本函数不会将当前Context对象的内容清空
+// release 将当前Context对象放回对象池，请注意，本函数不会将当前Context对象的内容清空
 // Context对象的清空操作，在clone或者NewContext时执行
-func (ctx *Context) putPool() {
+func (ctx *Context) release() {
 	if ctx != nil {
 		contextPool.Put(ctx)
 	}
