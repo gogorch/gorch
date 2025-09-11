@@ -1,0 +1,4 @@
+
+FRAGMENT("test"){
+	@a(fatal=true) -> GO(a(changeTo=11), "aa")
+}

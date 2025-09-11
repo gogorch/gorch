@@ -7,6 +7,3 @@ START("test"){
 	-> b(changeTo=12, WAIT("aa", timeout=10ms))
 }
 
-FRAGMENT("test"){
-	@a(fatal=true) -> GO(a(changeTo=11), "aa")
-}
