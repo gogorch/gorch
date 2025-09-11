@@ -2,5 +2,5 @@
 REGISTER("github.com/gogorch/gorch/examples/operators"){
 	OPERATOR("opa", "OperatorA0", "a", 1)
 	OPERATOR("opb", "OperatorB0", "b", 2)
-	OPERATOR("sleepop", "SleepOp", "SleepOp", 3)
+	OPERATOR("sleepop", "SleepOp", 3)
 }
