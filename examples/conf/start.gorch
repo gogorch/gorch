@@ -3,7 +3,7 @@ START("test"){
 
 	UNFOLD("test")
 	-> SleepOp(sleep=10ms)
-	-> b(changeTo=1)
+	-> SKIP(b(changeTo=1))
 	-> b(changeTo=12, WAIT("aa", timeout=10ms))
 }
 
