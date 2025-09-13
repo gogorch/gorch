@@ -268,13 +268,19 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 				// 将 context 回收移动到这里，确保在 gp.processor.Execute(nctx) 完全执行完成后才回收
 				// 原来的问题：nctx.release() 在 defer 中过早执行，导致 context 被回收后，
 				// gp.processor.Execute(nctx) 访问 nctx.interrupt 等字段时出现空指针解引用
-				defer nctx.release()
 				st := time.Now()
+				defer func() {
+					co := time.Since(st)
+					nctx.Logger.Info("routineExecuteFinish",
+						mlog.String("cost", co.String()),
+						mlog.String("routine", r.name),
+						mlog.String("start", st.String()),
+					)
+					nctx.release()
+				}()
 				_ = gp.processor.Execute(nctx)
-				co := time.Since(st)
-				nctx.Logger.AddInfo(mlog.Duration("routine_"+r.name, co))
 			}); err != nil {
-				nctx.Logger.Error("routine execute error", mlog.Error("error", err))
+				nctx.Logger.Error("routineExecuteError", mlog.Error("error", err))
 				// 【修复资源泄漏】错误情况下也要确保回收 context
 				nctx.release()
 			}
@@ -409,15 +415,15 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 			err = fmt.Errorf("operator %s execute panic", op.Name)
 			fields := RecoverPanic(er)
 			fields = append(fields, mlog.String("panicOperator", op.Name))
-			ctx.Logger.Error("operatorExecutePanic", fields...)
+			ctx.Logger.Error("OperatorExecutePanic", fields...)
 		}
 
 		if err != nil {
 			if op.OperatorStmt.IgnoreError {
-				ctx.Logger.Warn("operator execute error, ignore", mlog.String("operator", op.Name), mlog.Error("error", err))
+				ctx.Logger.Warn("OperatorExecuteErrorButIgnore", mlog.String("operator", op.Name), mlog.Error("error", err))
 				err = nil
 			} else {
-				ctx.Logger.Error("operator execute error", mlog.String("operator", op.Name), mlog.Error("error", err))
+				ctx.Logger.Error("OperatorExecuteError", mlog.String("operator", op.Name), mlog.Error("error", err))
 				ctx.Exit(err)
 			}
 		}
@@ -488,7 +494,7 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		statusCode = status.code
 		if status.fatal {
 			if op.OperatorStmt.IgnoreError {
-				ctx.Logger.Info("operator execute return fatal error, but ignore",
+				ctx.Logger.Info("OperatorExecuteReturnFatalErrorButIgnore",
 					mlog.String("operator", op.Name), mlog.Error("error", err))
 				err = nil
 				return

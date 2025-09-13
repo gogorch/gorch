@@ -152,8 +152,10 @@ func (s *executor) Execute(ctx context.Context) error {
 		rctx.recorder.Stop()
 
 		rs := rctx.recorder.Report()
-		rctx.Logger.AddInfo(mlog.String("record", rs.Format(s.logThreshold)))
-		rctx.Logger.AddInfo(mlog.String("total", rs.TotalCost.String()))
+		rctx.Logger.Info("EngineExecuteFinish",
+			mlog.String("record", rs.Format(s.logThreshold)),
+			mlog.String("total", rs.TotalCost.String()),
+		)
 		rctx.recorder.Reset()
 
 		releaseContext(rctx)

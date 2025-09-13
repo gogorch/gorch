@@ -6,19 +6,11 @@ import (
 )
 
 type Logger interface {
-	AddDebug(...LogValue)
-
 	Debug(string, ...LogValue)
-
-	AddInfo(...LogValue)
 
 	Info(string, ...LogValue)
 
-	AddWarn(...LogValue)
-
 	Warn(string, ...LogValue)
-
-	AddError(...LogValue)
 
 	Error(string, ...LogValue)
 }
