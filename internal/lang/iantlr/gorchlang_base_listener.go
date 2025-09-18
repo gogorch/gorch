@@ -1,6 +1,6 @@
 // Code generated from gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package alr // gorchlang
+package iantlr // gorchlang
 import "github.com/antlr4-go/antlr/v4"
 
 // BasegorchlangListener is a complete listener for a parse tree produced by gorchlangParser.

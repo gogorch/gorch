@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gogorch/gorch/internal/lang/iantlr/alr"
+	alr "github.com/gogorch/gorch/internal/lang/iantlr"
 )
 
 type WaitDirective struct {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/gogorch/gorch/internal/lang/ast"
-	"github.com/gogorch/gorch/internal/lang/iantlr/alr"
+	alr "github.com/gogorch/gorch/internal/lang/iantlr"
 	"github.com/gogorch/gorch/internal/lang/utils"
 )
 

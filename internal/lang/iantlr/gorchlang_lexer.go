@@ -1,6 +1,6 @@
-// Code generated from /Users/zhangming/gopath/src/github.com/period331/jagep/internal/lang/iantlr/jagelang.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package parser
+package iantlr
 
 import (
 	"fmt"
@@ -14,14 +14,14 @@ var _ = fmt.Printf
 var _ = sync.Once{}
 var _ = unicode.IsLetter
 
-type jagelangLexer struct {
+type gorchlangLexer struct {
 	*antlr.BaseLexer
 	channelNames []string
 	modeNames    []string
 	// TODO: EOF string
 }
 
-var JagelangLexerLexerStaticData struct {
+var GorchlangLexerLexerStaticData struct {
 	once                   sync.Once
 	serializedATN          []int32
 	ChannelNames           []string
@@ -34,8 +34,8 @@ var JagelangLexerLexerStaticData struct {
 	decisionToDFA          []*antlr.DFA
 }
 
-func jagelanglexerLexerInit() {
-	staticData := &JagelangLexerLexerStaticData
+func gorchlanglexerLexerInit() {
+	staticData := &GorchlangLexerLexerStaticData
 	staticData.ChannelNames = []string{
 		"DEFAULT_TOKEN_CHANNEL", "HIDDEN",
 	}
@@ -208,72 +208,72 @@ func jagelanglexerLexerInit() {
 	}
 }
 
-// jagelangLexerInit initializes any static state used to implement jagelangLexer. By default the
+// gorchlangLexerInit initializes any static state used to implement gorchlangLexer. By default the
 // static state used to implement the lexer is lazily initialized during the first call to
-// NewjagelangLexer(). You can call this function if you wish to initialize the static state ahead
+// NewgorchlangLexer(). You can call this function if you wish to initialize the static state ahead
 // of time.
-func JagelangLexerInit() {
-	staticData := &JagelangLexerLexerStaticData
-	staticData.once.Do(jagelanglexerLexerInit)
+func GorchlangLexerInit() {
+	staticData := &GorchlangLexerLexerStaticData
+	staticData.once.Do(gorchlanglexerLexerInit)
 }
 
-// NewjagelangLexer produces a new lexer instance for the optional input antlr.CharStream.
-func NewjagelangLexer(input antlr.CharStream) *jagelangLexer {
-	JagelangLexerInit()
-	l := new(jagelangLexer)
+// NewgorchlangLexer produces a new lexer instance for the optional input antlr.CharStream.
+func NewgorchlangLexer(input antlr.CharStream) *gorchlangLexer {
+	GorchlangLexerInit()
+	l := new(gorchlangLexer)
 	l.BaseLexer = antlr.NewBaseLexer(input)
-	staticData := &JagelangLexerLexerStaticData
+	staticData := &GorchlangLexerLexerStaticData
 	l.Interpreter = antlr.NewLexerATNSimulator(l, staticData.atn, staticData.decisionToDFA, staticData.PredictionContextCache)
 	l.channelNames = staticData.ChannelNames
 	l.modeNames = staticData.ModeNames
 	l.RuleNames = staticData.RuleNames
 	l.LiteralNames = staticData.LiteralNames
 	l.SymbolicNames = staticData.SymbolicNames
-	l.GrammarFileName = "jagelang.g4"
+	l.GrammarFileName = "gorchlang.g4"
 	// TODO: l.EOF = antlr.TokenEOF
 
 	return l
 }
 
-// jagelangLexer tokens.
+// gorchlangLexer tokens.
 const (
-	jagelangLexerT__0          = 1
-	jagelangLexerT__1          = 2
-	jagelangLexerT__2          = 3
-	jagelangLexerT__3          = 4
-	jagelangLexerT__4          = 5
-	jagelangLexerT__5          = 6
-	jagelangLexerT__6          = 7
-	jagelangLexerT__7          = 8
-	jagelangLexerT__8          = 9
-	jagelangLexerT__9          = 10
-	jagelangLexerT__10         = 11
-	jagelangLexerT__11         = 12
-	jagelangLexerT__12         = 13
-	jagelangLexerT__13         = 14
-	jagelangLexerT__14         = 15
-	jagelangLexerT__15         = 16
-	jagelangLexerT__16         = 17
-	jagelangLexerT__17         = 18
-	jagelangLexerT__18         = 19
-	jagelangLexerT__19         = 20
-	jagelangLexerT__20         = 21
-	jagelangLexerT__21         = 22
-	jagelangLexerT__22         = 23
-	jagelangLexerT__23         = 24
-	jagelangLexerT__24         = 25
-	jagelangLexerT__25         = 26
-	jagelangLexerT__26         = 27
-	jagelangLexerT__27         = 28
-	jagelangLexerT__28         = 29
-	jagelangLexerT__29         = 30
-	jagelangLexerTRUE          = 31
-	jagelangLexerFALSE         = 32
-	jagelangLexerID            = 33
-	jagelangLexerINT           = 34
-	jagelangLexerDQUOTA_STRING = 35
-	jagelangLexerLINE_COMMENT  = 36
-	jagelangLexerCOMMENT       = 37
-	jagelangLexerTERMINATOR    = 38
-	jagelangLexerWS            = 39
+	gorchlangLexerT__0          = 1
+	gorchlangLexerT__1          = 2
+	gorchlangLexerT__2          = 3
+	gorchlangLexerT__3          = 4
+	gorchlangLexerT__4          = 5
+	gorchlangLexerT__5          = 6
+	gorchlangLexerT__6          = 7
+	gorchlangLexerT__7          = 8
+	gorchlangLexerT__8          = 9
+	gorchlangLexerT__9          = 10
+	gorchlangLexerT__10         = 11
+	gorchlangLexerT__11         = 12
+	gorchlangLexerT__12         = 13
+	gorchlangLexerT__13         = 14
+	gorchlangLexerT__14         = 15
+	gorchlangLexerT__15         = 16
+	gorchlangLexerT__16         = 17
+	gorchlangLexerT__17         = 18
+	gorchlangLexerT__18         = 19
+	gorchlangLexerT__19         = 20
+	gorchlangLexerT__20         = 21
+	gorchlangLexerT__21         = 22
+	gorchlangLexerT__22         = 23
+	gorchlangLexerT__23         = 24
+	gorchlangLexerT__24         = 25
+	gorchlangLexerT__25         = 26
+	gorchlangLexerT__26         = 27
+	gorchlangLexerT__27         = 28
+	gorchlangLexerT__28         = 29
+	gorchlangLexerT__29         = 30
+	gorchlangLexerTRUE          = 31
+	gorchlangLexerFALSE         = 32
+	gorchlangLexerID            = 33
+	gorchlangLexerINT           = 34
+	gorchlangLexerDQUOTA_STRING = 35
+	gorchlangLexerLINE_COMMENT  = 36
+	gorchlangLexerCOMMENT       = 37
+	gorchlangLexerTERMINATOR    = 38
+	gorchlangLexerWS            = 39
 )

@@ -1,11 +1,10 @@
-// Code generated from /Users/zhangming/gopath/src/github.com/period331/jagep/internal/lang/iantlr/jagelang.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
-package parser // jagelang
-
+package iantlr // gorchlang
 import "github.com/antlr4-go/antlr/v4"
 
-// jagelangListener is a complete listener for a parse tree produced by jagelangParser.
-type jagelangListener interface {
+// gorchlangListener is a complete listener for a parse tree produced by gorchlangParser.
+type gorchlangListener interface {
 	antlr.ParseTreeListener
 
 	// EnterPrimary is called when entering the primary production.
