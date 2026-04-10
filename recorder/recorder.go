@@ -10,7 +10,7 @@ import (
 
 // Recorder 提供算子级执行记录能力
 type Recorder interface {
-	// WithOperatorName 设置是否在日志中使用算子名称而非序号
+	// UseOperatorName 设置是否在日志中使用算子名称而非序号
 	UseOperatorName(bool) Recorder
 
 	// Start 开始一次引擎执行记录
@@ -35,7 +35,7 @@ type Done func(status int)
 // Report 提供只读的执行报告
 type Report struct {
 	TotalCost time.Duration
-	Operators []operatorSnapshot
+	Operators []OperatorRecord
 }
 
 // OperatorRecord 单条算子记录
@@ -53,21 +53,13 @@ type recorder struct {
 	start   time.Time
 	total   time.Duration
 
-	// 无锁化热点路径：先写本地缓存，再一次性合并
-	localOps []operatorSnapshot
+	localOps []OperatorRecord
 	mu       sync.Mutex
-}
-
-type operatorSnapshot struct {
-	name     string
-	startOff time.Duration
-	cost     time.Duration
-	status   int
 }
 
 var (
 	recorderPool = pool.NewObjectPool(func(r *recorder) {
-		r.localOps = make([]operatorSnapshot, 0, 128)
+		r.reset()
 	})
 )
 
@@ -75,54 +67,93 @@ var (
 func New() Recorder { return recorderPool.Get() }
 
 func (r *recorder) UseOperatorName(on bool) Recorder {
+	r.mu.Lock()
 	r.logName = on
+	r.mu.Unlock()
 	return r
 }
 
 func (r *recorder) Start() {
+	r.mu.Lock()
 	r.start = time.Now()
+	r.total = 0
+	if r.localOps == nil {
+		r.localOps = make([]OperatorRecord, 0, 128)
+	} else {
+		r.localOps = r.localOps[:0]
+	}
+	r.mu.Unlock()
 }
 
 func (r *recorder) Stop() {
+	r.mu.Lock()
 	r.total = time.Since(r.start)
+	r.mu.Unlock()
 }
 
 func (r *recorder) Elapsed() time.Duration {
-	return time.Since(r.start)
+	r.mu.Lock()
+	start := r.start
+	r.mu.Unlock()
+	return time.Since(start)
 }
 
 func (r *recorder) Record(name, seq string) Done {
+	r.mu.Lock()
+	base := r.start
 	start := time.Now()
 	key := seq
 	if r.logName {
 		key = name
 	}
+	r.mu.Unlock()
+
+	startOff := time.Duration(0)
+	if !base.IsZero() {
+		startOff = start.Sub(base)
+	}
+
 	return func(status int) {
-		snap := operatorSnapshot{
-			name:     key,
-			startOff: time.Since(r.start),
-			cost:     time.Since(start),
-			status:   status,
+		rec := OperatorRecord{
+			Name:     key,
+			StartOff: startOff,
+			Cost:     time.Since(start),
+			Status:   status,
 		}
 		r.mu.Lock()
-		r.localOps = append(r.localOps, snap)
+		r.localOps = append(r.localOps, rec)
 		r.mu.Unlock()
 	}
 }
 
 func (r *recorder) Report() Report {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	ops := make([]OperatorRecord, len(r.localOps))
+	copy(ops, r.localOps)
 	return Report{
 		TotalCost: r.total,
-		Operators: r.localOps,
+		Operators: ops,
 	}
 }
 
 func (r *recorder) Reset() {
-	// 回收前重置状态
-	r.localOps = r.localOps[:0]
-	r.total = 0
-	r.start = time.Time{}
+	r.mu.Lock()
+	r.reset()
+	r.mu.Unlock()
 	recorderPool.Put(r)
+}
+
+func (r *recorder) reset() {
+	r.logName = false
+	r.start = time.Time{}
+	r.total = 0
+	if r.localOps == nil {
+		r.localOps = make([]OperatorRecord, 0, 128)
+	} else {
+		r.localOps = r.localOps[:0]
+	}
 }
 
 // Format 将 Report 格式化为字符串，避免每次分配 bytes.Buffer
@@ -131,16 +162,16 @@ func (rep Report) Format(threshold time.Duration) string {
 	defer pool.BytesBufferPool.Put(buf)
 
 	for i, op := range rep.Operators {
-		buf.WriteString(op.name)
-		if op.cost > threshold {
+		buf.WriteString(op.Name)
+		if op.Cost > threshold {
 			buf.WriteString(",")
-			buf.WriteString(durationToMillStr(op.startOff))
+			buf.WriteString(durationToMillStr(op.StartOff))
 			buf.WriteString(",")
-			buf.WriteString(durationToMillStr(op.cost))
+			buf.WriteString(durationToMillStr(op.Cost))
 		}
-		if op.status != 0 {
+		if op.Status != 0 {
 			buf.WriteString(",")
-			buf.WriteString(strconv.Itoa(op.status))
+			buf.WriteString(strconv.Itoa(op.Status))
 		}
 		if i != len(rep.Operators)-1 {
 			buf.WriteString("|")
