@@ -92,9 +92,10 @@ func main() {
 
     // 执行
     executor := engine.Start("main")
-    result := executor.Execute()
-
-    fmt.Printf("Execution result: %v\n", result.Error())
+    err = executor.Execute(context.Background())
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -114,6 +115,35 @@ Gorch诞生于对高效业务流程编排的需求。在百度搜索部门的大
 
 ## 🏗️ 核心概念
 
+### DSL 指令总览（与 `iantlr/gorchlang.g4` 对齐）
+
+> 以下为 DSL 的关键字/指令级语法，和 `iantlr/gorchlang.g4` 保持一致。
+
+| 分类 | 语法 | 说明 |
+|------|------|------|
+| 入口块 | `START("name"[, args]) { ... }` | 流程入口，可定义多个 |
+| 片段块 | `FRAGMENT("name") { ... }` | 可复用流程片段 |
+| 注册块 | `REGISTER("pkg") { OPERATOR(...) }` | 注册算子元信息 |
+| 收尾块 | `ON_FINISH() { ... }` | `START` 内可选，主流程结束后执行 |
+| 跳过缺失校验 | `NO_CHECK_MISS()` | `START` 内可选，关闭未注册算子静态检查 |
+| 片段展开 | `UNFOLD("fragment_name")` | 在流程中展开 FRAGMENT |
+| 异步启动 | `GO(exedesc, "task_name")` | 启动后台任务 |
+| 异步等待 | `WAIT("task_name"[, args])` | 仅可作为算子参数使用 |
+| 条件分支 | `SWITCH(operator) { CASE "x" => leaf, ... }` | 路由分支执行 |
+| 循环 | `LOOP(args) { exedesc }` | 循环执行，常配 `UNTIL/BREAK` |
+| 重试 | `RETRY(args) { exedesc }` | 失败重试控制流 |
+| 追踪片段 | `TRACE("span_name") { exedesc }` | 显式创建 trace 边界 |
+| 条件终止 | `UNTIL(operator)` | 在循环中设置条件终止 |
+| 立即终止循环 | `BREAK()` | 终止当前 `LOOP` |
+| 串行跳过 | `SKIP(operator)` | 先执行 `operator`；仅当其调用 `ctx.SkipSerial()` 时跳过后续串行节点 |
+
+| 操作符/符号 | 语法 | 说明 |
+|------|------|------|
+| 串行 | `a -> b -> c` | 顺序执行 |
+| 并行 | `[a, b, c]` | 并发执行 |
+| 包装执行 | `wrapA \| wrapB \| leaf` | 包装算子链（无 `WRAP` 关键字） |
+| 忽略错误 | `@Operator(...)` / `@WAIT(...)` | 忽略当前算子/WAIT 错误 |
+
 ### 执行块 (Execution Blocks)
 
 Gorch提供三种核心执行块，构建完整的业务流程：
@@ -126,10 +156,19 @@ Gorch提供三种核心执行块，构建完整的业务流程：
 
 #### START 执行块
 
-程序的入口点，定义主要的执行流程：
+程序的入口点，定义主要的执行流程。`START` 内支持两个可选前置块：
+- `ON_FINISH()`：流程结束后执行（无论主流程成功或失败）
+- `NO_CHECK_MISS()`：关闭当前 `START` 的“未注册算子”静态检查
+
+示例：
 
 ```gorch
 START("user_service") {
+    ON_FINISH() {
+        Cleanup()
+    }
+    NO_CHECK_MISS()
+
     ValidateUser(userId=123)
     -> LoadUserProfile()
     -> [LoadPreferences(), LoadHistory()]  // 并行加载
@@ -205,6 +244,31 @@ START("conditional") {
 
 ### 高级特性
 
+#### 循环执行 (`LOOP` / `UNTIL` / `BREAK`)
+
+`LOOP` 支持按最大轮次循环执行；`UNTIL` 用于执行条件算子并在条件满足时结束循环；`BREAK` 可立即终止当前循环。
+
+```gorch
+START("agent_loop") {
+    LOOP(MAX_ITER=8) {
+        AskLLM()
+        -> CallTools()
+        -> UNTIL(ShouldStop())   // ShouldStop 内部调用 ctx.SetLoopUntil(true)
+        -> SaveResult()
+    }
+}
+```
+
+```go
+type ShouldStop struct {
+    LoopState *LoopState `inject:""`
+}
+
+func (s *ShouldStop) Execute(ctx *gorch.Context) error {
+    return ctx.SetLoopUntil(s.LoopState.Done)
+}
+```
+
 #### 异步执行 (`GO` & `WAIT`)
 
 Gorch支持强大的异步执行模式，允许任务在后台运行，提高整体执行效率：
@@ -225,6 +289,10 @@ START("async_demo") {
     )
 }
 ```
+
+约束说明：
+- `GO("task")` 与 `WAIT("task")` 必须在同一 `START` 作用域（含 `UNFOLD` 展开后）成对匹配
+- `WAIT(...)` 只能写在算子参数中，不能单独作为流程节点
 
 **WAIT 指令参数详解：**
 
@@ -259,7 +327,69 @@ START("wait_modes") {
 }
 ```
 
-#### 包装算子 (`WRAP`)
+#### 失败重试 (`RETRY`)
+
+`RETRY` 用于把重试语义从算子内逻辑提升到 DSL 层，避免每个算子重复实现重试代码。
+
+```gorch
+START("retry_demo") {
+    RETRY(MAX_TIMES=3, interval=200ms) {
+        CallRemoteAPI()
+    }
+    -> SaveResult()
+}
+```
+
+参数说明：
+- `MAX_TIMES` / `maxTimes`：必填，且必须大于 `0`
+- `interval` / `INTERVAL`：可选，重试间隔
+
+#### 追踪打点 (`TRACE`)
+
+`TRACE` 用于在 DSL 内显式创建一个追踪片段。执行到该节点时会先开启一个 `trace` span，再执行块内逻辑；块内算子会继续产生 `operator` 子 span。
+
+```gorch
+START("order_flow") {
+    ValidateRequest()
+    -> TRACE("inventory_stage") {
+        ReserveInventory()
+        -> NotifyWarehouse()
+    }
+    -> CreateOrder()
+}
+```
+
+> 执行语义：`TRACE` 是同步节点，不会改变原有串并行行为，只增加追踪边界。
+
+```go
+type myHooks struct{}
+
+func (h myHooks) StartFlow(ctx context.Context, flow string) (context.Context, gorch.TraceSpan) {
+    // 在外部仓库里可用 OTel Tracer.Start(ctx, "flow:"+flow)
+    return ctx, mySpan{}
+}
+
+func (h myHooks) StartNode(ctx context.Context, node, kind string) (context.Context, gorch.TraceSpan) {
+    // kind 典型值: "operator" / "trace"
+    return ctx, mySpan{}
+}
+
+type mySpan struct{}
+
+func (mySpan) End(err error) {
+    // 这里将 err 记录到 tracing 系统
+}
+
+func main() {
+    gorch.SetTraceHooks(myHooks{})
+    // ...
+}
+```
+
+#### 包装执行 (`|`)
+
+Gorch 的包装能力由 `|` 运算符表达，不存在 `WRAP(...)` 关键字：
+
 ```gorch
 START("wrapped") {
     (LogWrapper | BusinessLogic())  // 为业务逻辑添加日志
@@ -268,11 +398,14 @@ START("wrapped") {
 ```
 
 #### 跳过控制 (`SKIP`)
+
+`SKIP(op)` 会先执行 `op`。只有当 `op` 内部调用了 `ctx.SkipSerial()`，才会停止当前串行链后续节点执行；否则与普通节点一致继续向后执行。该语义只在串行链（`->`）中生效。
+
 ```gorch
 START("conditional_skip") {
     CheckCondition()
-    -> SKIP(ProcessA())  // 可能被跳过
-    -> ProcessB()        // 总是执行
+    -> SKIP(ProcessA())  // ProcessA 调用 ctx.SkipSerial() 时，后续被跳过
+    -> ProcessB()        // 仅在未触发 SkipSerial 时执行
 }
 ```
 
@@ -378,7 +511,7 @@ START("param_demo") {
 
 ### 高效的协程管理
 - **协程池复用** - 避免频繁创建销毁协程的开销
-- **智能调度** - 根据系统负载动态调整并发度
+- **可插拔调度** - 可通过 `SetGoroutinePool` 接入外部协程池/调度器
 - **内存优化** - 对象池减少GC压力
 
 ### 零拷贝数据传递
@@ -388,14 +521,16 @@ START("param_demo") {
 
 ### 可观测性
 ```go
-// 启用执行记录
-recorder := recorder.New()
-executor := engine.Start("main").WithRecorder(recorder)
+executor := engine.Start("main")
+executor.SetLogOperatorName()                   // 日志里打印算子名
+executor.SetLogThreshold(5 * time.Millisecond)  // 超过阈值记录耗时
 
-// 获取执行统计
-stats := recorder.GetStats()
-fmt.Printf("Total time: %v\n", stats.TotalTime)
-fmt.Printf("Operator count: %d\n", stats.OperatorCount)
+// 可选：替换为自定义 recorder 实现
+executor.SetRecorder(recorder.New())
+
+if err := executor.Execute(context.Background()); err != nil {
+    log.Fatal(err)
+}
 ```
 
 ## 📚 最佳实践
@@ -428,18 +563,8 @@ START("optimized") {
 #### 基础错误处理
 ```go
 func (o *NetworkOperator) Execute(ctx *gorch.Context) error {
-    // 设置超时
-    ctx.SetTimeout(30 * time.Second)
-
-    // 重试机制
-    for i := 0; i < 3; i++ {
-        if err := o.doNetworkCall(); err == nil {
-            return nil
-        }
-        time.Sleep(time.Duration(i+1) * time.Second)
-    }
-
-    return fmt.Errorf("network call failed after 3 retries")
+    // 业务错误直接返回，重试建议放到 DSL 的 RETRY 指令中统一处理
+    return o.doNetworkCall()
 }
 ```
 

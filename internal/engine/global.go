@@ -41,6 +41,7 @@ func clean() {
 		namesMap: make(map[string]OperatorFactory),
 		seqsMap:  make(map[string]string),
 	}
+	resetRuntimeStats()
 }
 
 func SetDefaultLogger(l mlog.Logger) {

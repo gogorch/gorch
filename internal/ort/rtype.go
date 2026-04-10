@@ -24,11 +24,6 @@ type OperatorRType struct {
 	AllDIFields map[string]struct{}
 }
 
-// tmpPrepareOperator 定义了一个接口，包含 Prepare 方法，用于判断类型是否实现了 Prepare 方法。
-type tmpPrepareOperator interface {
-	Prepare() error
-}
-
 // AnalyzeOperator 分析泛型类型 T 的结构体信息，提取注入和提取字段，并判断是否实现了 Prepare 方法。
 // 返回一个包含分析结果的 OperatorRType 指针。
 func AnalyzeOperator[T any]() *OperatorRType {
@@ -65,7 +60,7 @@ func AnalyzeOperator[T any]() *OperatorRType {
 	}
 
 	// 判断类型是否实现了 Prepare 方法
-	if _, ok := any(s).(tmpPrepareOperator); ok {
+	if _, ok := any(s).(interface{ Prepare() error }); ok {
 		of.HasPrepare = true
 	}
 

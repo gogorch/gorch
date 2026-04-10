@@ -43,10 +43,10 @@ type TypeTest struct {
 
 func TestInject(t *testing.T) {
 	t.Run("test_inject_interface", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 		var tss TestSubInterface = &TestSubStrut{Name: "test"}
-		c.RegisterIns(&tss, true)
+		registerAny(c, &tss, true)
 
 		tt := &TypeTest{}
 		err := s.inject(tt, c)
@@ -55,7 +55,7 @@ func TestInject(t *testing.T) {
 	})
 
 	t.Run("test_inject_buildin_type", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 
 		var vstring string = "test"
@@ -74,22 +74,22 @@ func TestInject(t *testing.T) {
 		var vsliceInt []int = []int{1, 2, 3}
 		var vsliceAny []any = []any{1, 2, 3}
 		var vsliceString []string = []string{"1", "2", "3"}
-		assert.Nil(t, c.RegisterIns(toPtr(&vstring), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vint8), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vint32), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vint64), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vint), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vfloat32), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vfloat64), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vuint8), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vuint32), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vuint64), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vuint), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vmapIntString), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vmapStringAny), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vsliceInt), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vsliceAny), true))
-		assert.Nil(t, c.RegisterIns(toPtr(&vsliceString), true))
+		assert.Nil(t, registerAny(c, toPtr(&vstring), true))
+		assert.Nil(t, registerAny(c, toPtr(&vint8), true))
+		assert.Nil(t, registerAny(c, toPtr(&vint32), true))
+		assert.Nil(t, registerAny(c, toPtr(&vint64), true))
+		assert.Nil(t, registerAny(c, toPtr(&vint), true))
+		assert.Nil(t, registerAny(c, toPtr(&vfloat32), true))
+		assert.Nil(t, registerAny(c, toPtr(&vfloat64), true))
+		assert.Nil(t, registerAny(c, toPtr(&vuint8), true))
+		assert.Nil(t, registerAny(c, toPtr(&vuint32), true))
+		assert.Nil(t, registerAny(c, toPtr(&vuint64), true))
+		assert.Nil(t, registerAny(c, toPtr(&vuint), true))
+		assert.Nil(t, registerAny(c, toPtr(&vmapIntString), true))
+		assert.Nil(t, registerAny(c, toPtr(&vmapStringAny), true))
+		assert.Nil(t, registerAny(c, toPtr(&vsliceInt), true))
+		assert.Nil(t, registerAny(c, toPtr(&vsliceAny), true))
+		assert.Nil(t, registerAny(c, toPtr(&vsliceString), true))
 		tt := &TypeTest{}
 		err := s.inject(tt, c)
 		assert.Nil(t, err)
@@ -112,10 +112,10 @@ func TestInject(t *testing.T) {
 	})
 
 	t.Run("test_inject_struct", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 		ss := &TestSubStrut{Name: "test"}
-		assert.Nil(t, c.RegisterIns(&ss, true))
+		assert.Nil(t, registerAny(c, &ss, true))
 		tt := &TypeTest{}
 		err := s.inject(tt, c)
 		assert.Nil(t, err)
@@ -129,7 +129,7 @@ func toPtr[T any](val T) *T {
 
 func TestExtract(t *testing.T) {
 	t.Run("test_extract_interface", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 		var tss TestSubInterface = &TestSubStrut{Name: "test"}
 		tt := &TypeTest{Interface: tss}
@@ -143,7 +143,7 @@ func TestExtract(t *testing.T) {
 
 		// 通过MutableIns
 		var tss1 TestSubInterface
-		assert.Nil(t, c.MutableIns(&tss1))
+		assert.Nil(t, mutableAny(c, &tss1))
 		assert.Equal(t, "test", tss1.TestInterface())
 
 		// 通过inject tag
@@ -154,7 +154,7 @@ func TestExtract(t *testing.T) {
 	})
 
 	t.Run("test_extract_buildin_type", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 		var vstring string = "test"
 		var vint8 int8 = 1
@@ -253,7 +253,7 @@ func TestExtract(t *testing.T) {
 	})
 
 	t.Run("test_extract_struct", func(t *testing.T) {
-		s := ditool[TypeTest]()
+		s := analyzeOperatorFields[TypeTest]()
 		c := newContainer()
 
 		ss := &TestSubStrut{Name: "test"}
@@ -268,7 +268,7 @@ func TestExtract(t *testing.T) {
 
 		// 通过MutableIns
 		var tss1 *TestSubStrut
-		assert.Nil(t, c.MutableIns(&tss1))
+		assert.Nil(t, mutableAny(c, &tss1))
 		assert.Equal(t, "test", tss1.Name)
 
 		// 通过inject tag
@@ -286,6 +286,6 @@ func checkGetIns[T any](t *testing.T, c *container, val T, except any) {
 
 func checkMutableIns[T any](t *testing.T, c *container, _ T, except any) {
 	var ts *T
-	assert.Nil(t, c.MutableIns(&ts))
+	assert.Nil(t, mutableAny(c, &ts))
 	assert.Equal(t, except, *ts)
 }

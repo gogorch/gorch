@@ -54,6 +54,31 @@ func (ls *LeafSnippet) AcceptWrapBracketStmt(wbs *WrapBracketStmt) error {
 	return nil
 }
 
+func (ls *LeafSnippet) AcceptLoopDirective(ld *LoopDirective) error {
+	ls.Leaf = ld
+	return nil
+}
+
+func (ls *LeafSnippet) AcceptRetryDirective(rd *RetryDirective) error {
+	ls.Leaf = rd
+	return nil
+}
+
+func (ls *LeafSnippet) AcceptTraceDirective(td *TraceDirective) error {
+	ls.Leaf = td
+	return nil
+}
+
+func (ls *LeafSnippet) AcceptUntilDirective(ud *UntilDirective) error {
+	ls.Leaf = ud
+	return nil
+}
+
+func (ls *LeafSnippet) AcceptBreakDirective(bd *BreakDirective) error {
+	ls.Leaf = bd
+	return nil
+}
+
 func (ls *LeafSnippet) Description(s *strings.Builder, blank string) {
 	ls.Leaf.Description(s, blank)
 }

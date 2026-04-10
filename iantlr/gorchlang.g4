@@ -47,6 +47,11 @@ exedescStmt
     | operatorStmt
     | switchDirective
     | unfoldDirective
+    | loopDirective
+    | retryDirective
+    | traceDirective
+    | untilDirective
+    | breakDirective
 ;
 
 // 执行片段
@@ -58,6 +63,11 @@ leafSnippet
     | wrapBracketStmt
     | goDirective
     | switchDirective
+    | loopDirective
+    | retryDirective
+    | traceDirective
+    | untilDirective
+    | breakDirective
 ;
 
 operatorStmt
@@ -118,6 +128,31 @@ switchDirective
 
 switchCaseDirective
     : 'CASE' (caseName = stringLiteral) '=>' leafSnippet
+;
+
+// 循环执行
+loopDirective
+    : 'LOOP' '(' argsStmt ')' '{' exedescStmt '}'
+;
+
+// 失败重试
+retryDirective
+    : 'RETRY' '(' argsStmt ')' '{' exedescStmt '}'
+;
+
+// 手工打点追踪
+traceDirective
+    : 'TRACE' '(' (name = stringLiteral) ')' '{' exedescStmt '}'
+;
+
+// 条件终止，执行条件算子，由算子通过 Context.SetLoopUntil(bool) 设置结果
+untilDirective
+    : 'UNTIL' '(' operatorStmt ')'
+;
+
+// 立即终止当前循环
+breakDirective
+    : 'BREAK' '(' ')'
 ;
 
 registerOperatorDirective

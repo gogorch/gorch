@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,9 @@ func registerTestOperator(t *testing.T) {
 	assert.Nil(t, RegisterOperator[SwitchOp]("SwitchOp", 8))
 	assert.Nil(t, RegisterOperator[WrapAndChangeValOp]("WrapAndChangeValOp", 9))
 	assert.Nil(t, RegisterOperator[SkipOp]("SkipOp", 10))
+	assert.Nil(t, RegisterOperator[AddValueOp]("AddValueOp", 11))
+	assert.Nil(t, RegisterOperator[UntilValueReachedOp]("UntilValueReachedOp", 12))
+	assert.Nil(t, RegisterOperator[RetryFailThenPassOp]("RetryFailThenPassOp", 13))
 }
 
 type TestValus struct {
@@ -85,7 +89,28 @@ func (p *PanicOp) Execute(ctx *Context) error {
 }
 
 type BeChangeValue struct {
+	mu  sync.Mutex
 	Val int64
+}
+
+func (b *BeChangeValue) Get() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.Val
+}
+
+func (b *BeChangeValue) Set(v int64) {
+	b.mu.Lock()
+	b.Val = v
+	b.mu.Unlock()
+}
+
+func (b *BeChangeValue) Add(delta int64) int64 {
+	b.mu.Lock()
+	b.Val += delta
+	v := b.Val
+	b.mu.Unlock()
+	return v
 }
 
 // ChangeValueOP 改变值的算子
@@ -100,12 +125,12 @@ func (c *ChangeValueOP) Execute(ctx *Context) error {
 	}
 
 	if ctx.Has("if") {
-		if ctx.Arg("if").Int64() != c.BeChangeValue.Val {
+		if ctx.Arg("if").Int64() != c.BeChangeValue.Get() {
 			return errors.New("ChangeValueOP operator if condition not equal")
 		}
 	}
 
-	c.BeChangeValue.Val = ctx.Arg("val").Int64()
+	c.BeChangeValue.Set(ctx.Arg("val").Int64())
 	return nil
 }
 
@@ -171,7 +196,7 @@ func (g *GoOperator) Execute(ctx *Context) error {
 
 	time.Sleep(ctx.Arg("sleep").Duration())
 
-	g.BeChangeValue.Val = ctx.Arg("val").Int64()
+	g.BeChangeValue.Set(ctx.Arg("val").Int64())
 	return nil
 }
 
@@ -195,7 +220,7 @@ func (s *WrapAndChangeValOp) Execute(ctx *Context) error {
 		return errors.New("WrapAndChangeValOp operator must get val argument")
 	}
 
-	s.BeChangeValue.Val = ctx.Arg("val").Int64()
+	s.BeChangeValue.Set(ctx.Arg("val").Int64())
 
 	if ctx.Has("noNext") && ctx.Arg("noNext").Bool() {
 		return nil
@@ -212,6 +237,46 @@ func (s *SkipOp) Execute(ctx *Context) error {
 
 	if ctx.Arg("skip").Bool() {
 		return ctx.SkipSerial()
+	}
+
+	return nil
+}
+
+type AddValueOp struct {
+	BeChangeValue *BeChangeValue `inject:""`
+}
+
+func (a *AddValueOp) Execute(ctx *Context) error {
+	if !ctx.Has("delta") {
+		return errors.New("AddValueOp operator must get delta argument")
+	}
+	a.BeChangeValue.Add(ctx.Arg("delta").Int64())
+	return nil
+}
+
+type UntilValueReachedOp struct {
+	BeChangeValue *BeChangeValue `inject:""`
+}
+
+func (u *UntilValueReachedOp) Execute(ctx *Context) error {
+	if !ctx.Has("target") {
+		return errors.New("UntilValueReachedOp operator must get target argument")
+	}
+	return ctx.SetLoopUntil(u.BeChangeValue.Get() >= ctx.Arg("target").Int64())
+}
+
+type RetryFailThenPassOp struct {
+	BeChangeValue *BeChangeValue `inject:""`
+}
+
+func (r *RetryFailThenPassOp) Execute(ctx *Context) error {
+	if !ctx.Has("failTimes") {
+		return errors.New("RetryFailThenPassOp operator must get failTimes argument")
+	}
+
+	try := r.BeChangeValue.Add(1)
+	if try <= ctx.Arg("failTimes").Int64() {
+		return errors.New("retry failed")
 	}
 
 	return nil

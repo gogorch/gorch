@@ -18,9 +18,9 @@ type {{$operator.Name}}{{$operator.Struct}} {{$operator.PkgAlias}}.{{$operator.S
 func(o *{{$operator.Name}}{{$operator.Struct}}) Execute(ctx *gorch.Context) (err error) {
     {{- range $idx1, $injectItem := $operator.RType.Injects}}
     {{- if $injectItem.Optional}}
-    _ = ctx.MutableIns(&o.{{$injectItem.Name}})
+    _ = gorch.MutableTyped(ctx, &o.{{$injectItem.Name}})
     {{- else}}
-    if er0 := ctx.MutableIns(&o.{{$injectItem.Name}}); er0 != nil {
+    if er0 := gorch.MutableTyped(ctx, &o.{{$injectItem.Name}}); er0 != nil {
         return fmt.Errorf("inject {{$pkg}}.{{$operator.Struct}}.{{$injectItem.Name}} error: %v", er0)
     }
     {{- end}}
@@ -29,9 +29,9 @@ func(o *{{$operator.Name}}{{$operator.Struct}}) Execute(ctx *gorch.Context) (err
     defer func() {
     {{- range $idx2, $extractItem := $operator.RType.Extracts}}
         {{- if $extractItem.Optional}}
-        _ = ctx.RegisterIns(&o.{{$extractItem.Name}}, {{if $extractItem.Replace}}true{{else}}false{{end}})
+        _ = gorch.RegisterTyped(ctx, &o.{{$extractItem.Name}}, {{if $extractItem.Replace}}true{{else}}false{{end}})
         {{- else}}
-        if er0 := ctx.RegisterIns(&o.{{$extractItem.Name}}, {{if $extractItem.Replace}}true{{else}}false{{end}}); er0 != nil {
+        if er0 := gorch.RegisterTyped(ctx, &o.{{$extractItem.Name}}, {{if $extractItem.Replace}}true{{else}}false{{end}}); er0 != nil {
             err = fmt.Errorf("extract {{$pkg}}.{{$operator.Struct}}.{{$extractItem.Name}} error: %v", er0)
             return
         }

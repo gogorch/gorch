@@ -30,6 +30,16 @@ func createProcessor(stmt any) PrepareProcessor {
 		return newSwitchProcess(astStmt)
 	case *ast.SwitchCaseDirective:
 		return newSwitchCaseProcess(astStmt)
+	case *ast.LoopDirective:
+		return newLoopProcessor(astStmt)
+	case *ast.RetryDirective:
+		return newRetryProcessor(astStmt)
+	case *ast.TraceDirective:
+		return newTraceProcessor(astStmt)
+	case *ast.UntilDirective:
+		return newUntilProcessor(astStmt)
+	case *ast.BreakDirective:
+		return newBreakProcessor(astStmt)
 	case *ast.GoDirective:
 		return newGoProcessor(astStmt)
 	case *ast.WaitDirective:
@@ -101,14 +111,14 @@ func (s *starterProcessor) Execute(ctx *Context) (err error) {
 	defer func() {
 		if err := recover(); err != nil {
 			fields := RecoverPanic(err)
-			ctx.Logger.Error("engineExecutePanic", fields...)
+			ctx.Logger.Error("EngineExecutePanic", fields...)
 		}
 	}()
 
 	defer func() {
 		if s.onFinishProc != nil {
 			if er1 := s.onFinishProc.Execute(newCtx); er1 != nil {
-				ctx.Logger.Error("onFinishExecuteError", mlog.Error("error", er1))
+				ctx.Logger.Error("OnFinishExecuteError", mlog.Error("error", er1))
 			}
 		}
 
@@ -157,7 +167,7 @@ func (sp *serialProcessor) Execute(ctx *Context) (err error) {
 
 		_ = processor.Execute(newCtx)
 
-		if _, ok := processor.(*skipProcessor); ok && newCtx.skipSerial {
+		if newCtx.skipSerial {
 			break
 		}
 	}
@@ -188,6 +198,236 @@ func (sp *skipProcessor) Execute(ctx *Context) error {
 	ret := sp.processor.Execute(newCtx)
 	ctx.skipSerial = newCtx.skipSerial
 	return ret
+}
+
+type loopProcessor struct {
+	*ast.LoopDirective
+	args      *args
+	processor PrepareProcessor
+	maxIter   int64
+}
+
+func newLoopProcessor(stmt *ast.LoopDirective) *loopProcessor {
+	lp := new(loopProcessor)
+	lp.LoopDirective = stmt
+	return lp
+}
+
+func (lp *loopProcessor) Prepare() error {
+	lp.args = fromArgsStmt(lp.Args)
+	lp.maxIter = lp.args.Arg("MAX_ITER").Int64()
+	if lp.maxIter <= 0 {
+		lp.maxIter = lp.args.Arg("maxIter").Int64()
+	}
+	if lp.maxIter <= 0 {
+		return fmt.Errorf("LOOP require MAX_ITER > 0")
+	}
+
+	lp.processor = createProcessor(lp.ExedescStmt.ExedescStmt)
+	return lp.processor.Prepare()
+}
+
+func (lp *loopProcessor) Execute(ctx *Context) error {
+	lc := newLoopControl()
+
+	for i := int64(0); i < lp.maxIter; i++ {
+		if ctx.Exited() {
+			return nil
+		}
+
+		lc.resetRound()
+		roundCtx := ctx.clone()
+		roundCtx.currentLoop = lc
+
+		err := lp.processor.Execute(roundCtx)
+		ctx.skipSerial = roundCtx.skipSerial
+		roundCtx.release()
+		if err != nil {
+			return err
+		}
+
+		if lc.shouldBreak() {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+type retryProcessor struct {
+	*ast.RetryDirective
+	args      *args
+	processor PrepareProcessor
+	maxTimes  int64
+	interval  time.Duration
+}
+
+func newRetryProcessor(stmt *ast.RetryDirective) *retryProcessor {
+	rp := new(retryProcessor)
+	rp.RetryDirective = stmt
+	return rp
+}
+
+func (rp *retryProcessor) Prepare() error {
+	rp.args = fromArgsStmt(rp.Args)
+	rp.maxTimes = rp.args.Arg("MAX_TIMES").Int64()
+	if rp.maxTimes <= 0 {
+		rp.maxTimes = rp.args.Arg("maxTimes").Int64()
+	}
+	if rp.maxTimes <= 0 {
+		return fmt.Errorf("RETRY require MAX_TIMES > 0")
+	}
+
+	rp.interval = rp.args.Arg("interval").Duration()
+	if rp.interval <= 0 {
+		rp.interval = rp.args.Arg("INTERVAL").Duration()
+	}
+
+	rp.processor = createProcessor(rp.ExedescStmt.ExedescStmt)
+	return rp.processor.Prepare()
+}
+
+func (rp *retryProcessor) Execute(ctx *Context) error {
+	var lastErr error
+
+	for i := int64(0); i < rp.maxTimes; i++ {
+		if ctx.Exited() {
+			return nil
+		}
+
+		newCtx := ctx.clone()
+		newCtx.disableExitOnError = true
+		err := rp.processor.Execute(newCtx)
+		ctx.skipSerial = newCtx.skipSerial
+		newCtx.release()
+		if err == nil {
+			return nil
+		}
+		if st, ok := err.(*status); ok && st.fatal {
+			return err
+		}
+
+		lastErr = err
+		if i >= rp.maxTimes-1 {
+			break
+		}
+
+		if waitErr := rp.waitInterval(ctx); waitErr != nil {
+			return waitErr
+		}
+	}
+
+	return lastErr
+}
+
+func (rp *retryProcessor) waitInterval(ctx *Context) error {
+	if rp.interval <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(rp.interval)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case err := <-ctx.Wait():
+		return err
+	}
+}
+
+type traceProcessor struct {
+	*ast.TraceDirective
+	processor PrepareProcessor
+}
+
+func newTraceProcessor(stmt *ast.TraceDirective) *traceProcessor {
+	tp := new(traceProcessor)
+	tp.TraceDirective = stmt
+	return tp
+}
+
+func (tp *traceProcessor) Prepare() error {
+	tp.processor = createProcessor(tp.ExedescStmt.ExedescStmt)
+	return tp.processor.Prepare()
+}
+
+func (tp *traceProcessor) Execute(ctx *Context) (err error) {
+	if ctx.Exited() {
+		return nil
+	}
+
+	hooks := ctx.traceHooks
+	if hooks == nil {
+		hooks = getTraceHooks()
+	}
+	spanCtx, span := hooks.StartNode(ctx.ctx, tp.Name, "trace")
+	defer func() {
+		span.End(err)
+	}()
+
+	newCtx := ctx.clone()
+	newCtx.ctx = spanCtx
+	defer func() {
+		ctx.skipSerial = newCtx.skipSerial
+		newCtx.release()
+	}()
+
+	err = tp.processor.Execute(newCtx)
+	return err
+}
+
+type untilProcessor struct {
+	*ast.UntilDirective
+	processor PrepareProcessor
+}
+
+func newUntilProcessor(stmt *ast.UntilDirective) *untilProcessor {
+	up := new(untilProcessor)
+	up.UntilDirective = stmt
+	return up
+}
+
+func (up *untilProcessor) Prepare() error {
+	up.processor = createProcessor(up.OperatorStmt)
+	return up.processor.Prepare()
+}
+
+func (up *untilProcessor) Execute(ctx *Context) error {
+	if ctx.currentLoop == nil {
+		return errNotLoopDirective
+	}
+
+	newCtx := ctx.clone()
+	defer func() {
+		ctx.skipSerial = newCtx.skipSerial
+		newCtx.release()
+	}()
+	if err := up.processor.Execute(newCtx); err != nil {
+		return err
+	}
+	if newCtx.LoopUntil() {
+		return newCtx.BreakLoop()
+	}
+	return nil
+}
+
+type breakProcessor struct {
+	*ast.BreakDirective
+}
+
+func newBreakProcessor(stmt *ast.BreakDirective) *breakProcessor {
+	bp := new(breakProcessor)
+	bp.BreakDirective = stmt
+	return bp
+}
+
+func (bp *breakProcessor) Prepare() error {
+	return nil
+}
+
+func (bp *breakProcessor) Execute(ctx *Context) error {
+	return ctx.BreakLoop()
 }
 
 type concurrentProcessor struct {
@@ -271,7 +511,7 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 				st := time.Now()
 				defer func() {
 					co := time.Since(st)
-					nctx.Logger.Info("routineExecuteFinish",
+					nctx.Logger.Info("RoutineExecuteFinish",
 						mlog.String("cost", co.String()),
 						mlog.String("routine", r.name),
 						mlog.String("start", st.String()),
@@ -280,7 +520,7 @@ func (gp *goProcessor) Execute(ctx *Context) error {
 				}()
 				_ = gp.processor.Execute(nctx)
 			}); err != nil {
-				nctx.Logger.Error("routineExecuteError", mlog.Error("error", err))
+				nctx.Logger.Error("RoutineExecuteError", mlog.Error("error", err))
 				// 【修复资源泄漏】错误情况下也要确保回收 context
 				nctx.release()
 			}
@@ -316,7 +556,7 @@ func (wp *waitProcessor) Execute(ctx *Context) error {
 
 	err := r.wait(ctx.interrupt, config)
 	if wp.IgnoreError && err != nil {
-		ctx.Logger.Warn("wait routine error", mlog.Error("error", err), mlog.String("routine", wp.GoName))
+		ctx.Logger.Warn("WaitRoutineError", mlog.Error("error", err), mlog.String("routine", wp.GoName))
 		err = nil
 	}
 
@@ -424,7 +664,9 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 				err = nil
 			} else {
 				ctx.Logger.Error("OperatorExecuteError", mlog.String("operator", op.Name), mlog.Error("error", err))
-				ctx.Exit(err)
+				if !ctx.disableExitOnError {
+					ctx.Exit(err)
+				}
 			}
 		}
 	}()
@@ -433,10 +675,26 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		return nil
 	}
 
-	newCtx := ctx.clone()
+	hooks := ctx.traceHooks
+	if hooks == nil {
+		hooks = getTraceHooks()
+	}
+	spanCtx, span := hooks.StartNode(ctx.ctx, op.Name, "operator")
 	defer func() {
-		ctx.skipSerial = newCtx.skipSerial
-		newCtx.release()
+		span.End(err)
+	}()
+
+	newCtx := ctx.clone()
+	newCtx.ctx = spanCtx
+	releaseNow := true
+	syncSkipSerial := true
+	defer func() {
+		if syncSkipSerial {
+			ctx.skipSerial = newCtx.skipSerial
+		}
+		if releaseNow {
+			newCtx.release()
+		}
 	}()
 	newCtx.args = op.args
 	newCtx.switchCase = ctx.switchCase
@@ -462,8 +720,10 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 		})
 
 		var timedOut bool
+		var operatorDone bool
 		select {
 		case err = <-ch: // 算子正常完成
+			operatorDone = true
 		case <-timer.C: // 超时
 			err = errOperatorExecuteTimeout
 			timedOut = true
@@ -477,13 +737,27 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 			}
 		}
 
-		// 如果超时了，即使后来算子完成了，也要保持超时错误
-		if timedOut {
+		if !operatorDone {
 			select {
 			case <-ch:
-				// 算子在超时后完成了，但我们仍然返回超时错误
+				operatorDone = true
 			default:
 			}
+		}
+
+		if !operatorDone {
+			// 算子仍在后台执行，延迟回收 newCtx，避免对象池提前复用导致数据竞争。
+			releaseNow = false
+			// 结果尚未稳定，不同步 skipSerial。
+			syncSkipSerial = false
+			goRoutinePool.Go(func() {
+				<-ch
+				newCtx.release()
+			})
+		}
+
+		// 如果超时了，即使后来算子完成了，也要保持超时错误
+		if timedOut {
 			err = errOperatorExecuteTimeout
 		}
 	} else {
@@ -499,7 +773,9 @@ func (op *operatorProcessor) Execute(ctx *Context) (err error) {
 				err = nil
 				return
 			}
-			ctx.Exit(status)
+			if !ctx.disableExitOnError {
+				ctx.Exit(status)
+			}
 			return
 		}
 		err = nil

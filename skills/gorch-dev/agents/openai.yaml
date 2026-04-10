@@ -1,0 +1,3 @@
+interface:
+  display_name: "Gorch 开发指南"
+  short_description: "用于指导 Gorch DSL 引擎与 gorchc 的开发任务"

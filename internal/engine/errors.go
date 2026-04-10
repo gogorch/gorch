@@ -16,6 +16,7 @@ var (
 
 	// errNotSwitchOperator 不是一个switch选择算子
 	errNotSwitchOperator = errors.New("not switch operator")
+	errNotLoopDirective  = errors.New("not loop directive")
 
 	errEngineExecuteTimeout   = errors.New("engine execute timeout")
 	errOperatorExecuteTimeout = errors.New("operator execute timeout")

@@ -51,6 +51,31 @@ func (gs *ExedescStmt) AcceptUnfoldDirective(ud *UnfoldDirective) error {
 	return nil
 }
 
+func (gs *ExedescStmt) AcceptLoopDirective(ld *LoopDirective) error {
+	gs.ExedescStmt = ld
+	return nil
+}
+
+func (gs *ExedescStmt) AcceptRetryDirective(rd *RetryDirective) error {
+	gs.ExedescStmt = rd
+	return nil
+}
+
+func (gs *ExedescStmt) AcceptTraceDirective(td *TraceDirective) error {
+	gs.ExedescStmt = td
+	return nil
+}
+
+func (gs *ExedescStmt) AcceptUntilDirective(ud *UntilDirective) error {
+	gs.ExedescStmt = ud
+	return nil
+}
+
+func (gs *ExedescStmt) AcceptBreakDirective(bd *BreakDirective) error {
+	gs.ExedescStmt = bd
+	return nil
+}
+
 func (gs *ExedescStmt) Description(sb *strings.Builder, blank string) {
 	sb.WriteString(blank)
 	gs.ExedescStmt.Description(sb, blank)

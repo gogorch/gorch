@@ -104,24 +104,16 @@ func (cg *codeGenerator) importStruct() error {
 }
 
 func (cg *codeGenerator) runModTidy() error {
-	done := make(chan error)
-	go func() {
-		cmds := []string{"mod", "tidy"}
-		cmd := exec.Command(cg.goCmd, cmds...)
-		out, err := cmd.CombinedOutput()
-		if len(out) > 0 {
-			fmt.Printf("run `go mod tidy` out:\n%s\n", string(out))
-		}
-		if err != nil {
-			log.Printf("run `go mod tidy` failed, error: %s\n", err)
-			done <- err
-		}
-		done <- nil
-	}()
-
 	log.Println("start: go mod tidy")
-	err := <-done
+	cmd := exec.Command(cg.goCmd, "mod", "tidy")
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		fmt.Printf("run `go mod tidy` out:\n%s\n", string(out))
+	}
 	log.Println("go mod tidy, done")
+	if err != nil {
+		return fmt.Errorf("run `go mod tidy` failed: %w", err)
+	}
 	return err
 }
 
@@ -190,7 +182,7 @@ func (cg *codeGenerator) generateMiddleCode() error {
 		fmt.Printf("generate all code out:\n%s", string(out))
 	}
 	if err != nil {
-		log.Fatalf("failed with %s\n", err)
+		return fmt.Errorf("run middle code failed: %w", err)
 	}
 	_ = os.RemoveAll(tmpPath)
 

@@ -10,7 +10,7 @@ import (
 
 type operatorFields ort.OperatorRType
 
-func ditool[T any]() *operatorFields {
+func analyzeOperatorFields[T any]() *operatorFields {
 	of := ort.AnalyzeOperator[T]()
 	g := (*operatorFields)(unsafe.Pointer(of))
 	return g

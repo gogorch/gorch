@@ -97,13 +97,25 @@ var gorchLangComplexStartSyntaxCases = []gorchLangComplexStartSyntaxCase{
 	{
 		name: "wrap_go",
 		lang: `START("name", abc="123", bb=1, cc=true) {
-			a | GO(a, "123")
+			a | (GO(a, "123") -> a(WAIT("123")))
 		}`,
 	},
 	{
 		name: "wrap_op",
 		lang: `START("name", abc="123", bb=1, cc=true) {
 			a | a
+		}`,
+	},
+	{
+		name: "wrap_retry",
+		lang: `START("name", abc="123", bb=1, cc=true) {
+			a | RETRY(MAX_TIMES=2){ a -> b }
+		}`,
+	},
+	{
+		name: "wrap_trace",
+		lang: `START("name", abc="123", bb=1, cc=true) {
+			a | TRACE("wrapped_trace"){ a -> b }
 		}`,
 	},
 	{
@@ -115,7 +127,7 @@ var gorchLangComplexStartSyntaxCases = []gorchLangComplexStartSyntaxCase{
 				CASE "789" => [a, b],
 				CASE "10" => SWITCH(switch_op_nest) {CASE "1" => op, CASE "2" => op},
 				CASE "11" => UNFOLD("123"),
-				CASE "12" => GO(a, "123"),
+				CASE "12" => (GO(a, "123") -> a(WAIT("123"))),
 				CASE "14" => (a | b)
 			}
 		}`,

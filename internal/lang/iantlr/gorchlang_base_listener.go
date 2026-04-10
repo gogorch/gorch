@@ -1,4 +1,4 @@
-// Code generated from gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from iantlr/gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package iantlr // gorchlang
 import "github.com/antlr4-go/antlr/v4"
@@ -139,6 +139,36 @@ func (s *BasegorchlangListener) EnterSwitchCaseDirective(ctx *SwitchCaseDirectiv
 
 // ExitSwitchCaseDirective is called when production switchCaseDirective is exited.
 func (s *BasegorchlangListener) ExitSwitchCaseDirective(ctx *SwitchCaseDirectiveContext) {}
+
+// EnterLoopDirective is called when production loopDirective is entered.
+func (s *BasegorchlangListener) EnterLoopDirective(ctx *LoopDirectiveContext) {}
+
+// ExitLoopDirective is called when production loopDirective is exited.
+func (s *BasegorchlangListener) ExitLoopDirective(ctx *LoopDirectiveContext) {}
+
+// EnterRetryDirective is called when production retryDirective is entered.
+func (s *BasegorchlangListener) EnterRetryDirective(ctx *RetryDirectiveContext) {}
+
+// ExitRetryDirective is called when production retryDirective is exited.
+func (s *BasegorchlangListener) ExitRetryDirective(ctx *RetryDirectiveContext) {}
+
+// EnterTraceDirective is called when production traceDirective is entered.
+func (s *BasegorchlangListener) EnterTraceDirective(ctx *TraceDirectiveContext) {}
+
+// ExitTraceDirective is called when production traceDirective is exited.
+func (s *BasegorchlangListener) ExitTraceDirective(ctx *TraceDirectiveContext) {}
+
+// EnterUntilDirective is called when production untilDirective is entered.
+func (s *BasegorchlangListener) EnterUntilDirective(ctx *UntilDirectiveContext) {}
+
+// ExitUntilDirective is called when production untilDirective is exited.
+func (s *BasegorchlangListener) ExitUntilDirective(ctx *UntilDirectiveContext) {}
+
+// EnterBreakDirective is called when production breakDirective is entered.
+func (s *BasegorchlangListener) EnterBreakDirective(ctx *BreakDirectiveContext) {}
+
+// ExitBreakDirective is called when production breakDirective is exited.
+func (s *BasegorchlangListener) ExitBreakDirective(ctx *BreakDirectiveContext) {}
 
 // EnterRegisterOperatorDirective is called when production registerOperatorDirective is entered.
 func (s *BasegorchlangListener) EnterRegisterOperatorDirective(ctx *RegisterOperatorDirectiveContext) {

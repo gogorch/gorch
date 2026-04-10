@@ -26,5 +26,13 @@ jobs:
     - name: Test
       run: go test -coverprofile=coverage.txt -covermode=atomic ./... 
 
+    - name: Race Test (engine)
+      run: go test -race ./internal/engine
+
+    - name: gorchc Smoke Test
+      run: |
+        cd examples
+        go run ../gorchc -d ./conf -g gen
+
     - name: Codecov
       uses: codecov/codecov-action@v5

@@ -48,6 +48,20 @@ type Context struct {
 	// switchCase 在SWTICH指令场景下，调用指定的case算子
 	// 注意，支持调用多个case，在框架内部，会并发的执行多个case，且总是会傻傻的等待所有case执行完成后，才会结束SWITCH指令
 	switchCase func(...string) error
+
+	// currentLoop 当前正在执行的LOOP控制器
+	// 在非LOOP场景下为nil
+	currentLoop *loopControl
+
+	// strictGeneratedOnly 为 true 时，仅允许执行 gorchc 生成算子。
+	strictGeneratedOnly bool
+
+	// disableExitOnError 为 true 时，算子返回错误不会触发全局退出。
+	// 仅用于 RETRY 等需要捕获错误并重试的内部控制流。
+	disableExitOnError bool
+
+	// traceHooks 追踪钩子（无实现时为 no-op）。
+	traceHooks TraceHooks
 }
 
 var (
@@ -72,6 +86,10 @@ func NewContext() *Context {
 	nctx.skipSerial = false
 	nctx.nextWrap = nil
 	nctx.switchCase = nil
+	nctx.currentLoop = nil
+	nctx.strictGeneratedOnly = false
+	nctx.disableExitOnError = false
+	nctx.traceHooks = getTraceHooks()
 
 	return nctx
 }
@@ -96,6 +114,10 @@ func (ctx *Context) reset() {
 	ctx.skipSerial = false
 	ctx.nextWrap = nil
 	ctx.switchCase = nil
+	ctx.currentLoop = nil
+	ctx.strictGeneratedOnly = false
+	ctx.disableExitOnError = false
+	ctx.traceHooks = nil
 }
 
 // release 将当前Context对象放回对象池，请注意，本函数不会将当前Context对象的内容清空
@@ -122,6 +144,10 @@ func (ctx *Context) clone() *Context {
 	nctx.skipSerial = false
 	nctx.nextWrap = nil
 	nctx.switchCase = nil
+	nctx.currentLoop = ctx.currentLoop
+	nctx.strictGeneratedOnly = ctx.strictGeneratedOnly
+	nctx.disableExitOnError = ctx.disableExitOnError
+	nctx.traceHooks = ctx.traceHooks
 
 	return nctx
 }
@@ -148,6 +174,35 @@ func (ctx *Context) Switch(cases ...string) error {
 
 // SkipSerial 跳过当前串行执行，在其他场景内不生效
 func (ctx *Context) SkipSerial() error {
+	ctx.skipSerial = true
+	return nil
+}
+
+// SetLoopUntil 设置当前循环的UNTIL条件
+func (ctx *Context) SetLoopUntil(done bool) error {
+	if ctx.currentLoop == nil {
+		return errNotLoopDirective
+	}
+
+	ctx.currentLoop.setUntil(done)
+	return nil
+}
+
+// LoopUntil 返回当前循环的UNTIL条件
+func (ctx *Context) LoopUntil() bool {
+	if ctx.currentLoop == nil {
+		return false
+	}
+	return ctx.currentLoop.isUntil()
+}
+
+// BreakLoop 终止当前LOOP
+func (ctx *Context) BreakLoop() error {
+	if ctx.currentLoop == nil {
+		return errNotLoopDirective
+	}
+
+	ctx.currentLoop.setBreak()
 	ctx.skipSerial = true
 	return nil
 }

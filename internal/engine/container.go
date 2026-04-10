@@ -13,31 +13,27 @@ var (
 	containerPool = pool.NewObjectPool(func(t *container) {
 		t.reset()
 	})
-
-	invalidValue = reflect.Value{}
 )
 
 // container 容器对象
 // 每执行一次，都会创建或者从池里获取到一个新的容器对象用来保存当次执行所有要传递的对象
 // 在执行结束后，会将容器对象放回池中，供下次使用
 type container struct {
-	instances map[reflect.Type]reflect.Value
-	routines  map[string]*routine
-	mutex     *sync.RWMutex
+	typedInstances map[reflect.Type]any
+	routines       map[string]*routine
+	mutex          sync.RWMutex
 }
 
 func newContainer() *container {
-	ih := containerPool.Get()
-	ih.mutex = pool.RWMutexPool.Get()
-	return ih
+	return containerPool.Get()
 }
 
 func (cter *container) reset() {
 	// 【修复空指针】防止对象池回调时访问未初始化的 map
 	// 原来的问题：对象池在重置 container 时，map 字段可能为 nil，
 	// 直接调用 clear() 会导致 panic
-	if cter.instances == nil {
-		cter.instances = make(map[reflect.Type]reflect.Value)
+	if cter.typedInstances == nil {
+		cter.typedInstances = make(map[reflect.Type]any)
 	}
 	if cter.routines == nil {
 		cter.routines = make(map[string]*routine)
@@ -46,14 +42,11 @@ func (cter *container) reset() {
 	// 【修复竞态条件】使用互斥锁保护 map 操作，防止并发访问冲突
 	// 原来的问题：主线程在 releaseContainer() 中清理 map，
 	// 而 goroutine 同时在 container.getIns() 中读取 map，导致数据竞争
-	if cter.mutex != nil {
-		cter.mutex.Lock()
-		defer cter.mutex.Unlock()
-	}
+	cter.mutex.Lock()
+	defer cter.mutex.Unlock()
 
-	clear(cter.instances)
+	clear(cter.typedInstances)
 	clear(cter.routines)
-	cter.mutex = pool.RWMutexPool.Get()
 }
 
 // Releasable 支持将对象放回池中的对象
@@ -69,43 +62,38 @@ func releaseContainer(cter *container) {
 	}
 
 	// 释放容器中的实例对象
-	releaseInstances(cter.instances)
+	releaseInstances(cter.typedInstances)
 
 	// 释放容器中的协程对象
 	releaseRoutines(cter.routines)
 
-	// 【修复空指针】调整释放顺序，确保 reset() 在释放 mutex 之前执行
-	// 原来的问题：先释放 mutex，然后调用 reset()，但 reset() 需要使用 mutex，
-	// 导致访问已释放的 mutex 时出现空指针解引用
+	// 重置容器内容，避免对象池复用脏数据。
 	cter.reset()
-
-	// 【修复竞态条件】正确的互斥锁生命周期管理
-	// 释放当前的互斥锁
-	pool.RWMutexPool.Put(cter.mutex)
-
-	// 为下次使用准备新的互斥锁，避免对象池复用时的竞态条件
-	cter.mutex = pool.RWMutexPool.Get()
 
 	// 将容器放回对象池
 	containerPool.Put(cter)
 }
 
 // releaseInstances 释放容器中的实例对象，若对象实现了 Releasable 接口，则调用其 Release 方法。
-func releaseInstances(instances map[reflect.Type]reflect.Value) {
+func releaseInstances(instances map[reflect.Type]any) {
 	for t, ins := range instances {
-		// 检查值是否有效且不是零值
-		if !ins.IsValid() || (ins.Kind() == reflect.Ptr && ins.IsNil()) {
+		rv := reflect.ValueOf(ins)
+		if !rv.IsValid() || rv.Kind() != reflect.Ptr || rv.IsNil() {
 			continue
 		}
-		if ins.CanInterface() {
-			if p, ok := ins.Interface().(Releasable); ok && p != nil {
+		val := rv.Elem()
+		if !val.IsValid() || (val.Kind() == reflect.Ptr && val.IsNil()) {
+			continue
+		}
+		if val.CanInterface() {
+			if p, ok := val.Interface().(Releasable); ok && p != nil {
 				func() {
 					defer func() {
 						if err := recover(); err != nil {
 							fields := RecoverPanic(err)
 							fields = append(fields,
 								mlog.Any("err", err),
-								mlog.Reflect("ins", ins),
+								mlog.Reflect("ins", val),
 								mlog.ReflectType("type", t))
 
 							globalLogger.Error("panicWhenReleasingInstance", fields...)
@@ -127,23 +115,9 @@ func releaseRoutines(routines map[string]*routine) {
 	}
 }
 
-// RegisterIns 注册一个对象到当前调用的对象容器中，对象必须是一个指针类型的对象，否则会报错
-
-// 注册基础类型对象：
-//
-//	var a int = 123
-//	cter.RegisterIns(&a, true)
-//
-// 注册自定义类型对象：
-//
-//	var a *MyStruct
-//	cter.RegisterIns(&a, true)
-
-// 注册接口：
-//
-//	var a MyInterface
-//	cter.RegisterIns(&a, true)
-func (cter *container) RegisterIns(ins any, replace bool) error {
+// registerAny 注册一个对象到当前调用的对象容器中，对象必须是一个指针类型的对象，否则会报错。
+// 该函数仅用于动态类型场景（如 Executor.Inject）。
+func registerAny(cter *container, ins any, replace bool) error {
 	rvVal := reflect.ValueOf(ins)
 	if !rvVal.IsValid() {
 		return errRegisterInvalidIns
@@ -160,18 +134,46 @@ func (cter *container) RegisterIns(ins any, replace bool) error {
 
 	cter.mutex.Lock()
 	defer cter.mutex.Unlock()
-	if cter.instances == nil {
-		cter.instances = make(map[reflect.Type]reflect.Value)
+	if cter.typedInstances == nil {
+		cter.typedInstances = make(map[reflect.Type]any)
 	}
-	if _, has := cter.instances[rTyp]; has && !replace {
+	if _, has := cter.typedInstances[rTyp]; has && !replace {
 		return fmt.Errorf("register error: duplicate type, error type: %s", rTyp)
 	}
-	cter.instances[rTyp] = rVal
+	// typed fast-path 缓存原始指针，保证读取到最新值。
+	cter.typedInstances[rTyp] = ins
 	return nil
 }
 
-// MutableIns 获取一个对象值，对象必须是一个指针类型的对象，否则会报错
-func (cter *container) MutableIns(val any) error {
+// registerTyped 注册一个类型化对象到当前调用的对象容器中。
+// 与 registerAny 对比：
+// 1. 避免对调用参数进行反射解析
+// 2. 为 mutableTyped 提供更快的读取路径
+func registerTyped[T any](cter *container, ins *T, replace bool) error {
+	if ins == nil {
+		return fmt.Errorf("register error: pointer is nil")
+	}
+
+	rTyp := reflect.TypeFor[T]()
+
+	cter.mutex.Lock()
+	defer cter.mutex.Unlock()
+
+	if cter.typedInstances == nil {
+		cter.typedInstances = make(map[reflect.Type]any)
+	}
+	if _, has := cter.typedInstances[rTyp]; has && !replace {
+		return fmt.Errorf("register error: duplicate type, error type: %s", rTyp)
+	}
+
+	// 直接缓存原始指针，保持读取语义简单一致。
+	cter.typedInstances[rTyp] = ins
+
+	return nil
+}
+
+// mutableAny 获取一个对象值，对象必须是一个指针类型的对象，否则会报错。
+func mutableAny(cter *container, val any) error {
 	rvVal := reflect.ValueOf(val)
 	if !rvVal.IsValid() {
 		return errMutableInvalidIns
@@ -188,29 +190,69 @@ func (cter *container) MutableIns(val any) error {
 
 	cter.mutex.RLock()
 	defer cter.mutex.RUnlock()
-	if cter.instances == nil {
-		cter.instances = make(map[reflect.Type]reflect.Value)
+	if cter.typedInstances == nil {
+		return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
 	}
-	rvIns, has := cter.instances[rTyp]
+	raw, has := cter.typedInstances[rTyp]
 	if !has {
 		return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
 	}
-	rVal.Set(rvIns)
+	rvIns := reflect.ValueOf(raw)
+	if !rvIns.IsValid() || rvIns.Kind() != reflect.Ptr || rvIns.IsNil() {
+		return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
+	}
+	v := rvIns.Elem()
+	if !v.IsValid() || !v.Type().AssignableTo(rTyp) {
+		return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
+	}
+	rVal.Set(v)
 	return nil
+}
+
+// mutableTyped 获取一个类型化对象值，优先走 typed fast-path。
+func mutableTyped[T any](cter *container, val *T) error {
+	if val == nil {
+		return fmt.Errorf("mutable error: pointer is nil")
+	}
+
+	rTyp := reflect.TypeFor[T]()
+
+	cter.mutex.RLock()
+	defer cter.mutex.RUnlock()
+
+	if cter.typedInstances != nil {
+		if raw, has := cter.typedInstances[rTyp]; has {
+			if p, ok := raw.(*T); ok && p != nil {
+				*val = *p
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("mutable error: ins not found, error type: %s", rTyp)
 }
 
 // getIns 根据类型获取一个对象值
 func (cter *container) getIns(rt reflect.Type) (val reflect.Value, has bool) {
+	invalidValue := reflect.Value{}
 	cter.mutex.RLock()
 	defer cter.mutex.RUnlock()
-	if cter.instances == nil {
-		cter.instances = make(map[reflect.Type]reflect.Value)
+	if cter.typedInstances == nil {
+		return invalidValue, false
 	}
-	rvIns, has := cter.instances[rt]
-	if has {
-		return rvIns, true
+	raw, ok := cter.typedInstances[rt]
+	if !ok {
+		return invalidValue, false
 	}
-	return invalidValue, false
+	rvIns := reflect.ValueOf(raw)
+	if !rvIns.IsValid() || rvIns.Kind() != reflect.Ptr || rvIns.IsNil() {
+		return invalidValue, false
+	}
+	v := rvIns.Elem()
+	if !v.IsValid() || !v.Type().AssignableTo(rt) {
+		return invalidValue, false
+	}
+	return v, true
 }
 
 // setIns 设置一个对象值，本函数是在算子执行完成之后，将算子的extract属性设置到容器中
@@ -218,14 +260,20 @@ func (cter *container) getIns(rt reflect.Type) (val reflect.Value, has bool) {
 func (cter *container) setIns(rt reflect.Type, val reflect.Value, replace bool) error {
 	cter.mutex.Lock()
 	defer cter.mutex.Unlock()
-	if cter.instances == nil {
-		cter.instances = make(map[reflect.Type]reflect.Value)
+	if cter.typedInstances == nil {
+		cter.typedInstances = make(map[reflect.Type]any)
 	}
-	if _, has := cter.instances[rt]; has && !replace {
+	if _, has := cter.typedInstances[rt]; has && !replace {
 		return fmt.Errorf("register error: duplicate type, error type: %s", rt)
 	}
 
-	cter.instances[rt] = val
+	if !val.IsValid() {
+		delete(cter.typedInstances, rt)
+		return nil
+	}
+	holder := reflect.New(rt)
+	holder.Elem().Set(val)
+	cter.typedInstances[rt] = holder.Interface()
 	return nil
 }
 

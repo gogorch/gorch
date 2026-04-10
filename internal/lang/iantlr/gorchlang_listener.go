@@ -1,4 +1,4 @@
-// Code generated from gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from iantlr/gorchlang.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package iantlr // gorchlang
 import "github.com/antlr4-go/antlr/v4"
@@ -66,6 +66,21 @@ type gorchlangListener interface {
 
 	// EnterSwitchCaseDirective is called when entering the switchCaseDirective production.
 	EnterSwitchCaseDirective(c *SwitchCaseDirectiveContext)
+
+	// EnterLoopDirective is called when entering the loopDirective production.
+	EnterLoopDirective(c *LoopDirectiveContext)
+
+	// EnterRetryDirective is called when entering the retryDirective production.
+	EnterRetryDirective(c *RetryDirectiveContext)
+
+	// EnterTraceDirective is called when entering the traceDirective production.
+	EnterTraceDirective(c *TraceDirectiveContext)
+
+	// EnterUntilDirective is called when entering the untilDirective production.
+	EnterUntilDirective(c *UntilDirectiveContext)
+
+	// EnterBreakDirective is called when entering the breakDirective production.
+	EnterBreakDirective(c *BreakDirectiveContext)
 
 	// EnterRegisterOperatorDirective is called when entering the registerOperatorDirective production.
 	EnterRegisterOperatorDirective(c *RegisterOperatorDirectiveContext)
@@ -150,6 +165,21 @@ type gorchlangListener interface {
 
 	// ExitSwitchCaseDirective is called when exiting the switchCaseDirective production.
 	ExitSwitchCaseDirective(c *SwitchCaseDirectiveContext)
+
+	// ExitLoopDirective is called when exiting the loopDirective production.
+	ExitLoopDirective(c *LoopDirectiveContext)
+
+	// ExitRetryDirective is called when exiting the retryDirective production.
+	ExitRetryDirective(c *RetryDirectiveContext)
+
+	// ExitTraceDirective is called when exiting the traceDirective production.
+	ExitTraceDirective(c *TraceDirectiveContext)
+
+	// ExitUntilDirective is called when exiting the untilDirective production.
+	ExitUntilDirective(c *UntilDirectiveContext)
+
+	// ExitBreakDirective is called when exiting the breakDirective production.
+	ExitBreakDirective(c *BreakDirectiveContext)
 
 	// ExitRegisterOperatorDirective is called when exiting the registerOperatorDirective production.
 	ExitRegisterOperatorDirective(c *RegisterOperatorDirectiveContext)

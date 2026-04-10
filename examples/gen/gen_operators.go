@@ -13,7 +13,7 @@ import (
 var _ = fmt.Printf
 type aOperatorA0 package00.OperatorA0
 func(o *aOperatorA0) Execute(ctx *gorch.Context) (err error) {
-    if er0 := ctx.MutableIns(&o.A); er0 != nil {
+    if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
         return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opa.OperatorA0.A error: %v", er0)
     }
     return (*package00.OperatorA0)(o).Execute(ctx)
@@ -21,7 +21,7 @@ func(o *aOperatorA0) Execute(ctx *gorch.Context) (err error) {
 func(o *aOperatorA0) IsGenerateOperatorCode() {}
 type bOperatorB0 package01.OperatorB0
 func(o *bOperatorB0) Execute(ctx *gorch.Context) (err error) {
-    if er0 := ctx.MutableIns(&o.A); er0 != nil {
+    if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
         return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opb.OperatorB0.A error: %v", er0)
     }
     return (*package01.OperatorB0)(o).Execute(ctx)

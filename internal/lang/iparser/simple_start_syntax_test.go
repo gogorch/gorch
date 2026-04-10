@@ -26,6 +26,7 @@ REGISTER("github.com/gogorch") {
     OPERATOR("gorch/ops", "c", 7)
     OPERATOR("gorch/ops", "switch_op", 8)
     OPERATOR("switch_op_nest", "switch_op_nest", 9)
+    OPERATOR("gorch/ops", "dsfa", 10)
 }`
 
 type gorchLangSimpleStartSyntaxCase struct {
@@ -57,6 +58,7 @@ var gorchLangSimpleSyntaxCases = []gorchLangSimpleStartSyntaxCase{
 			-> SWITCH(dsfa) {
 				CASE "123" => op
 			}
+			-> p1(WAIT("p1_go"))
 		}
 			FRAGMENT("123") {
 			a -> b
@@ -73,6 +75,7 @@ var gorchLangSimpleSyntaxCases = []gorchLangSimpleStartSyntaxCase{
 				UNFOLD("123"),
 				(p | p1 | (p -> p1)),
 				GO(p, "p1_go"),
+				p1(WAIT("p1_go")),
 				SWITCH(dsfa) {
 					CASE "123" => op
 				}
@@ -134,7 +137,7 @@ var gorchLangSimpleSyntaxCases = []gorchLangSimpleStartSyntaxCase{
 				CASE "123" => (op -> op1),
 				CASE "456" => [a, b],
 				CASE "789" => (a | a | b),
-				CASE "10" => GO(a, "123"),
+				CASE "10" => (GO(a, "123") -> a(WAIT("123"))),
 				CASE "11" => op,
 				CASE "12" => SWITCH(switch_op_nest) {CASE "1" => op, CASE "2" => op}
 			}
@@ -156,6 +159,30 @@ var gorchLangSimpleSyntaxCases = []gorchLangSimpleStartSyntaxCase{
 			a -> b
 		}
 		`,
+	},
+	{
+		name: "single_loop_until_break",
+		lang: `START("name", abc="123", bb=1, cc=true) {
+			LOOP(MAX_ITER=3) {
+				a -> UNTIL(b) -> BREAK()
+			}
+		}`,
+	},
+	{
+		name: "single_retry",
+		lang: `START("name", abc="123", bb=1, cc=true) {
+			RETRY(MAX_TIMES=3) {
+				a -> b
+			}
+		}`,
+	},
+	{
+		name: "single_trace",
+		lang: `START("name", abc="123", bb=1, cc=true) {
+			TRACE("main_step") {
+				a -> b
+			}
+		}`,
 	},
 }
 

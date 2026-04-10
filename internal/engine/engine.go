@@ -2,6 +2,9 @@ package engine
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/gogorch/gorch/internal/lang/ast"
@@ -12,19 +15,32 @@ import (
 
 type Engine interface {
 	Start(string) Executor
+	SetStrictGeneratedOnly(bool)
 }
 
 type engine struct {
-	starters map[string]PrepareProcessor
+	starters            map[string]PrepareProcessor
+	strictGeneratedOnly atomic.Bool
 }
 
 func (eng *engine) Start(key string) Executor {
 	st, has := eng.starters[key]
 	if has {
-		return newExecutor(NewContext(), st, 8*time.Second)
+		return newExecutor(executorOptions{
+			ctx:                 NewContext(),
+			startName:           key,
+			processor:           st,
+			timeout:             8 * time.Second,
+			strictGeneratedOnly: eng.strictGeneratedOnly.Load(),
+			traceHooks:          getTraceHooks(),
+		})
 	}
 
 	return nil
+}
+
+func (eng *engine) SetStrictGeneratedOnly(enabled bool) {
+	eng.strictGeneratedOnly.Store(enabled)
 }
 
 // New 创建执行引擎对象
@@ -71,6 +87,8 @@ type Executor interface {
 
 type executor struct {
 	ctx *Context
+	// startName 当前执行入口名（START 名称）
+	startName string
 
 	// 执行超时时间
 	timeout time.Duration
@@ -82,6 +100,10 @@ type executor struct {
 	// 打印算子耗时的阈值
 	// 当算子的耗时大于这个阈值，才会记录算子的耗时到日志
 	logThreshold time.Duration
+	// strictGeneratedOnly 为 true 时，仅允许执行 gorchc 生成算子
+	strictGeneratedOnly bool
+	// traceHooks 跟随 executor 生命周期固定，避免执行中动态切换。
+	traceHooks TraceHooks
 
 	p Processor
 }
@@ -89,25 +111,46 @@ type executor struct {
 var (
 	executorPool = pool.NewObjectPool(func(t *executor) {
 		t.ctx = nil
+		t.startName = ""
 		t.timeout = 0
 		t.recorder = nil
 		t.logOperatorName = false
 		t.logThreshold = defaultLogThreshold
+		t.strictGeneratedOnly = false
+		t.traceHooks = nil
 		t.p = nil
 	})
 )
 
-func newExecutor(ctx *Context, p PrepareProcessor, to time.Duration) *executor {
+type executorOptions struct {
+	ctx                 *Context
+	startName           string
+	processor           PrepareProcessor
+	timeout             time.Duration
+	strictGeneratedOnly bool
+	traceHooks          TraceHooks
+}
+
+func newExecutor(opt executorOptions) *executor {
 	s := executorPool.Get()
-	s.ctx = ctx
-	s.p = p
-	s.timeout = to
+	s.ctx = opt.ctx
+	s.startName = opt.startName
+	s.p = opt.processor
+	s.timeout = opt.timeout
+	s.strictGeneratedOnly = opt.strictGeneratedOnly
+	if s.timeout <= 0 {
+		s.timeout = 8 * time.Second
+	}
+	if opt.traceHooks == nil {
+		opt.traceHooks = getTraceHooks()
+	}
+	s.traceHooks = opt.traceHooks
 	return s
 }
 
 func (s *executor) Inject(vals ...any) error {
 	for i := range vals {
-		if err := s.ctx.RegisterIns(vals[i], true); err != nil {
+		if err := registerAny(s.ctx.container, vals[i], true); err != nil {
 			return err
 		}
 	}
@@ -133,12 +176,14 @@ func (s *executor) SetLogThreshold(t time.Duration) {
 	s.logThreshold = t
 }
 
-func (s *executor) Execute(ctx context.Context) error {
+func (s *executor) Execute(ctx context.Context) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	rctx := s.ctx
-	rctx.ctx = ctx
+	rctx.traceHooks = s.traceHooks
+	flowCtx, flowSpan := rctx.traceHooks.StartFlow(ctx, s.startName)
+	rctx.ctx = flowCtx
 	rctx.recorder = s.recorder
 	if rctx.recorder == nil {
 		rctx.recorder = recorder.New()
@@ -146,9 +191,12 @@ func (s *executor) Execute(ctx context.Context) error {
 	if s.logOperatorName {
 		rctx.recorder.UseOperatorName(true)
 	}
+	rctx.strictGeneratedOnly = s.strictGeneratedOnly
 
 	rctx.recorder.Start()
 	defer func() {
+		flowSpan.End(retErr)
+
 		rctx.recorder.Stop()
 
 		rs := rctx.recorder.Report()
@@ -187,5 +235,15 @@ func (s *executor) Execute(ctx context.Context) error {
 		}
 	}
 
-	return rctx.err
+	retErr = rctx.err
+	return retErr
+}
+
+// InjectTyped 向执行器容器注入强类型对象，避免 Inject(vals ...any) 的反射开销。
+func InjectTyped[T any](e Executor, ins *T) error {
+	exec, ok := e.(*executor)
+	if !ok {
+		return fmt.Errorf("inject typed error: unsupported executor type %s", reflect.TypeOf(e))
+	}
+	return registerTyped(exec.ctx.container, ins, true)
 }

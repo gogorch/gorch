@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -259,6 +260,15 @@ func (sds *StartDirectives) SelfCheck() error {
 	if err := sds.checkWaitDirective(); err != nil {
 		return err
 	}
+
+	if err := sds.checkRequiredParams(); err != nil {
+		return err
+	}
+
+	if err := sds.checkUnreachableBranch(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -290,9 +300,15 @@ func (sds *StartDirectives) checkWaitDirective() error {
 	}
 
 	for _, sd := range sds.Map {
-		for wn := range sd.WaitDirectiveMap {
+		for _, wn := range sortedMapKeys(sd.WaitDirectiveMap) {
 			if _, ok := sd.goDirectiveMap[wn]; !ok {
 				return fmt.Errorf("START %q: WAIT(%q) not find matched GO directive", sd.Name, wn)
+			}
+		}
+
+		for _, gn := range sortedGoMapKeys(sd.goDirectiveMap) {
+			if _, ok := sd.WaitDirectiveMap[gn]; !ok {
+				return fmt.Errorf("START %q: GO(%q) not find matched WAIT directive", sd.Name, gn)
 			}
 		}
 	}
@@ -301,16 +317,15 @@ func (sds *StartDirectives) checkWaitDirective() error {
 }
 
 func (sds *StartDirectives) checkOperatorMiss(allOperators *Operators) error {
-	for _, sd := range sds.Map {
+	for _, name := range sds.Sort {
+		sd := sds.Map[name]
 		if sd.NoCheckMiss {
 			continue
 		}
 
-		// 检查算子是否注册
-		for i := range sd.expectExecuteOperators {
-			if _, ok := allOperators.Names[i]; !ok {
-				return fmt.Errorf("in start %q, operator %q not register", sd.Name, i)
-			}
+		checker := newStartStaticChecker(sd)
+		if err := checker.checkOperatorMiss(allOperators); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -325,4 +340,22 @@ func checkWaitDirective(uds UnfoldDirectives, gdm map[string]struct{}) {
 			gdm[fgd] = struct{}{}
 		}
 	}
+}
+
+func sortedMapKeys(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedGoMapKeys(m map[string]*GoDirective) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
