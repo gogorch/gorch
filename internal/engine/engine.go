@@ -197,9 +197,8 @@ func (s *executor) Inject(vals ...any) error {
 }
 
 func (s *executor) SetTimeout(to time.Duration) {
-	if to > 0 {
-		s.timeout = to
-	}
+	// to <= 0 表示不限制执行超时时间（默认 8s）
+	s.timeout = to
 }
 
 func (s *executor) SetRecorder(r recorder.Recorder) {
@@ -261,11 +260,25 @@ func (s *executor) Execute(ctx context.Context) (retErr error) {
 		executorPool.Put(s)
 	}()
 
-	done := make(chan error)
+	done := make(chan error, 1)
 
 	goRoutinePool.Go(func() {
 		done <- s.p.Execute(rctx)
 	})
+
+	if s.timeout <= 0 {
+		// 未设置超时（SetTimeout(0)），只响应外部 ctx 取消
+		select {
+		case <-ctx.Done():
+			rctx.Exit(ctx.Err())
+			<-done
+		case err := <-done:
+			rctx.Exit(err)
+		}
+
+		retErr = rctx.err
+		return retErr
+	}
 
 	timer := time.NewTimer(s.timeout)
 	select {
