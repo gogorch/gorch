@@ -162,10 +162,14 @@ func (sp *serialProcessor) Execute(ctx *Context) (err error) {
 
 	for _, processor := range sp.processors {
 		if ctx.Exited() {
-			continue
+			break
 		}
 
-		_ = processor.Execute(newCtx)
+		// 错误必须向上传递：RETRY 的循环体是多算子串行序列时，
+		// 依赖这里的返回值判断本轮是否失败，吞掉错误会导致永远不重试。
+		if err := processor.Execute(newCtx); err != nil {
+			return err
+		}
 
 		if newCtx.skipSerial {
 			break
