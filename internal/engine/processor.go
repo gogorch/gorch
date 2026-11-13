@@ -848,7 +848,13 @@ func (sp *switchProcessor) Execute(ctx *Context) error {
 
 	choicesCases := make([]Processor, 0, len(sp.switchCases))
 	checkCaseDup := make(map[string]struct{}, len(sp.switchCases))
+	// SWITCH 的判定算子可能把 Context 传给子协程，在协程里回调 switchCase，
+	// 因此收集分支结果必须加锁。
+	var choicesMu sync.Mutex
 	newCtx0.switchCase = func(s ...string) error {
+		choicesMu.Lock()
+		defer choicesMu.Unlock()
+
 		for _, c := range s {
 			if _, ok := checkCaseDup[c]; ok {
 				return fmt.Errorf("duplicate switch case %q", c)
@@ -873,36 +879,52 @@ func (sp *switchProcessor) Execute(ctx *Context) error {
 		return nil
 	}
 
-	if len(choicesCases) == 0 {
+	choicesMu.Lock()
+	pickedCases := make([]Processor, len(choicesCases))
+	copy(pickedCases, choicesCases)
+	choicesMu.Unlock()
+
+	if len(pickedCases) == 0 {
 		return fmt.Errorf("switch %q no matching switch case found", sp.SwitchDirective.OperatorStmt.Name)
-	} else if len(choicesCases) == 1 {
+	} else if len(pickedCases) == 1 {
 		newCtx1 := ctx.clone()
 		defer newCtx1.release()
-		return choicesCases[0].Execute(newCtx1)
+		return pickedCases[0].Execute(newCtx1)
 	}
 
-	wait := &sync.WaitGroup{}
+	var (
+		wait     sync.WaitGroup
+		errMu    sync.Mutex
+		firstErr error
+	)
 
-	newCtx2 := ctx.clone()
-	defer newCtx2.release()
-
-	for _, cp := range choicesCases {
+	for _, cp := range pickedCases {
 		if ctx.Exited() {
 			break
 		}
 
 		wait.Add(1)
-		goRoutinePool.Go(func(nctx *Context, p Processor) func() {
+		goRoutinePool.Go(func(parent *Context, p Processor) func() {
 			return func() {
 				defer wait.Done()
 
-				_ = p.Execute(nctx)
+				// 每个分支使用独立的 Context，避免并行分支互相覆盖参数与跳过状态
+				nctx := parent.clone()
+				defer nctx.release()
+
+				if err := p.Execute(nctx); err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					errMu.Unlock()
+				}
 			}
-		}(newCtx2, cp))
+		}(ctx, cp))
 	}
 
 	wait.Wait()
-	return nil
+	return firstErr
 }
 
 type switchCaseProcessor struct {
