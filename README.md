@@ -424,7 +424,12 @@ gorchc -i ./gen -d ./conf
 
 # 打印解析结果（调试用）
 gorchc -p -d ./conf
+
+# 跳过 go mod tidy（CI / 离线环境下推荐，避免隐式改写 go.mod）
+gorchc -g ./gen -d ./conf -no-tidy
 ```
+
+> 输出目录不存在时会自动创建；生成结果会经过 `gofmt` 规范化。
 
 **自动生成内容：**
 - 算子注册代码
@@ -524,6 +529,7 @@ START("param_demo") {
 executor := engine.Start("main")
 executor.SetLogOperatorName()                   // 日志里打印算子名
 executor.SetLogThreshold(5 * time.Millisecond)  // 超过阈值记录耗时
+executor.SetTimeout(0)                          // 0 表示不限制执行超时（默认 8s）
 
 // 可选：替换为自定义 recorder 实现
 executor.SetRecorder(recorder.New())
