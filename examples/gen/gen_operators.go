@@ -4,50 +4,59 @@
 package gen_operators
 
 import (
-    "fmt"
+	"fmt"
+	"github.com/gogorch/gorch"
 	package00 "github.com/gogorch/gorch/examples/operators/opa"
 	package01 "github.com/gogorch/gorch/examples/operators/opb"
 	package02 "github.com/gogorch/gorch/examples/operators/sleepop"
-    "github.com/gogorch/gorch"
 )
+
 var _ = fmt.Printf
+
 type aOperatorA0 package00.OperatorA0
-func(o *aOperatorA0) Execute(ctx *gorch.Context) (err error) {
-    if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
-        return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opa.OperatorA0.A error: %v", er0)
-    }
-    return (*package00.OperatorA0)(o).Execute(ctx)
+
+func (o *aOperatorA0) Execute(ctx *gorch.Context) (err error) {
+	if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
+		return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opa.OperatorA0.A error: %v", er0)
+	}
+	return (*package00.OperatorA0)(o).Execute(ctx)
 }
-func(o *aOperatorA0) IsGenerateOperatorCode() {}
+func (o *aOperatorA0) IsGenerateOperatorCode() {}
+
 type bOperatorB0 package01.OperatorB0
-func(o *bOperatorB0) Execute(ctx *gorch.Context) (err error) {
-    if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
-        return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opb.OperatorB0.A error: %v", er0)
-    }
-    return (*package01.OperatorB0)(o).Execute(ctx)
+
+func (o *bOperatorB0) Execute(ctx *gorch.Context) (err error) {
+	if er0 := gorch.MutableTyped(ctx, &o.A); er0 != nil {
+		return fmt.Errorf("inject github.com/gogorch/gorch/examples/operators/opb.OperatorB0.A error: %v", er0)
+	}
+	return (*package01.OperatorB0)(o).Execute(ctx)
 }
-func(o *bOperatorB0) IsGenerateOperatorCode() {}
+func (o *bOperatorB0) IsGenerateOperatorCode() {}
+
 type SleepOpSleepOp package02.SleepOp
-func(o *SleepOpSleepOp) Execute(ctx *gorch.Context) (err error) {return (*package02.SleepOp)(o).Execute(ctx)}
-func(o *SleepOpSleepOp) IsGenerateOperatorCode() {}
+
+func (o *SleepOpSleepOp) Execute(ctx *gorch.Context) (err error) {
+	return (*package02.SleepOp)(o).Execute(ctx)
+}
+func (o *SleepOpSleepOp) IsGenerateOperatorCode() {}
 
 func init() {
 	must(
-        gorch.RegOp[aOperatorA0]("a", 1),
-        gorch.RegOp[bOperatorB0]("b", 2),
-        gorch.RegOp[SleepOpSleepOp]("SleepOp", 3),
-    )
+		gorch.RegOp[aOperatorA0]("a", 1),
+		gorch.RegOp[bOperatorB0]("b", 2),
+		gorch.RegOp[SleepOpSleepOp]("SleepOp", 3),
+	)
 }
 
 func must(errs ...error) {
-    hasErr := false
- 	for _, e := range errs {
- 		if e != nil {
-            hasErr = true
- 			fmt.Println(e)
- 		}
- 	}
-    if hasErr {
-        panic("register operator has error")
-    }
+	hasErr := false
+	for _, e := range errs {
+		if e != nil {
+			hasErr = true
+			fmt.Println(e)
+		}
+	}
+	if hasErr {
+		panic("register operator has error")
+	}
 }
