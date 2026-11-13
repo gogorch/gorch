@@ -27,17 +27,20 @@ type Interrupt interface {
 }
 
 type interrupt struct {
-	notify chan error
-	err    error
-	exit   bool
-	mutex  sync.RWMutex
+	// waiters 所有正在等待中断信号的 goroutine 各自的通道。
+	// 之前所有等待者共享一个容量为 1 的 chan，Exit 时只有一个等待者能拿到错误，
+	// 其余等待者从已关闭的通道读到 nil，并发场景下表现为偶发空错误。
+	waiters []chan error
+	err     error
+	exit    bool
+	mutex   sync.Mutex
 }
 
 var (
 	interruptPool = pool.NewObjectPool(func(i *interrupt) {
 		i.err = nil
 		i.exit = false
-		i.notify = make(chan error, 1)
+		i.waiters = nil
 	})
 )
 
@@ -53,34 +56,49 @@ func releaseInterrupt(i *interrupt) {
 
 func (i *interrupt) Exit(err error) {
 	i.mutex.Lock()
-	if !i.exit {
-		i.exit = true
-		i.err = err
-		i.notify <- err
-		close(i.notify)
+	if i.exit {
+		i.mutex.Unlock()
+		return
 	}
+	i.exit = true
+	i.err = err
+
+	waiters := i.waiters
+	i.waiters = nil
 	i.mutex.Unlock()
+
+	// 广播给所有等待者（通道容量为 1，写入不会阻塞）
+	for _, ch := range waiters {
+		ch <- err
+		close(ch)
+	}
 }
 
 func (i *interrupt) Wait() <-chan error {
-	if i.Exited() {
-		cpy := make(chan error, 1)
-		cpy <- i.err
-		return cpy
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
+	ch := make(chan error, 1)
+	if i.exit {
+		ch <- i.err
+		close(ch)
+		return ch
 	}
-	return i.notify
+
+	i.waiters = append(i.waiters, ch)
+	return ch
 }
 
 func (i *interrupt) Error() error {
-	i.mutex.RLock()
+	i.mutex.Lock()
 	err := i.err
-	i.mutex.RUnlock()
+	i.mutex.Unlock()
 	return err
 }
 
 func (im *interrupt) Exited() bool {
-	im.mutex.RLock()
+	im.mutex.Lock()
 	exit := im.exit
-	im.mutex.RUnlock()
+	im.mutex.Unlock()
 	return exit
 }
