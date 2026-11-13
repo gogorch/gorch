@@ -244,13 +244,18 @@ func (lp *loopProcessor) Execute(ctx *Context) error {
 		roundCtx.currentLoop = lc
 
 		err := lp.processor.Execute(roundCtx)
-		ctx.skipSerial = roundCtx.skipSerial
+		broke := lc.shouldBreak()
+		// BREAK 只终止当前循环，不能把 skipSerial 传播到外层串行序列，
+		// 否则 LOOP 之后的算子会被连带跳过。
+		if !broke {
+			ctx.skipSerial = roundCtx.skipSerial
+		}
 		roundCtx.release()
 		if err != nil {
 			return err
 		}
 
-		if lc.shouldBreak() {
+		if broke {
 			return nil
 		}
 	}

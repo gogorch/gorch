@@ -303,7 +303,10 @@ func (c *startStaticChecker) leafAlwaysTerminateWithSeen(leaf LeafSnippetI, seen
 		if stmt.ExedescStmt == nil {
 			return false
 		}
-		return c.exedescAlwaysTerminateWithSeen(stmt.ExedescStmt.ExedescStmt, seen)
+		// 循环体里的 BREAK 只会结束本轮循环，LOOP 执行完后仍会继续执行后续节点，
+		// 所以这里不能把循环体的终止性传播到外层串行序列。
+		c.exedescAlwaysTerminateWithSeen(stmt.ExedescStmt.ExedescStmt, seen)
+		return false
 	case *RetryDirective:
 		if stmt.ExedescStmt == nil {
 			return false
