@@ -466,23 +466,36 @@ func (cp *concurrentProcessor) Prepare() error {
 }
 
 func (cp *concurrentProcessor) Execute(ctx *Context) error {
-	g := &sync.WaitGroup{}
-	newCtx := ctx.clone()
-	defer newCtx.release()
+	var (
+		g        sync.WaitGroup
+		errMu    sync.Mutex
+		firstErr error
+	)
 
 	for _, processor := range cp.processors {
 		g.Add(1)
 
 		goRoutinePool.Go(
-			func(nctx *Context, t Processor) func() {
+			func(parent *Context, t Processor) func() {
 				return func() {
 					defer g.Done()
-					_ = t.Execute(nctx)
+
+					// 每个并行分支使用独立 Context，避免兄弟分支并发写同一份参数/跳过状态
+					nctx := parent.clone()
+					defer nctx.release()
+
+					if err := t.Execute(nctx); err != nil {
+						errMu.Lock()
+						if firstErr == nil {
+							firstErr = err
+						}
+						errMu.Unlock()
+					}
 				}
-			}(newCtx, processor))
+			}(ctx, processor))
 	}
 	g.Wait()
-	return nil
+	return firstErr
 }
 
 type goProcessor struct {
