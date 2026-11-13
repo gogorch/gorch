@@ -23,6 +23,9 @@ var d = flag.String("d", "", "set gorch dsl directory")
 // go go命令
 var goCmd = flag.String("go", "go", "set go command")
 
+// noTidy 跳过 go mod tidy
+var noTidy = flag.Bool("no-tidy", false, "skip `go mod tidy` after generating code")
+
 func main() {
 	flag.Parse()
 	if (*g == "" && !*p && *i == "") || *d == "" {
@@ -41,9 +44,10 @@ func main() {
 
 	if *i != "" {
 		err := (&codeGenerator{
-			p:     astl,
-			todir: *i,
-			goCmd: *goCmd,
+			p:      astl,
+			todir:  *i,
+			goCmd:  *goCmd,
+			noTidy: *noTidy,
 		}).importOperator()
 		if err != nil {
 			log.Fatal("generate code error: ", err)
@@ -53,9 +57,10 @@ func main() {
 
 	if *g != "" {
 		err := (&codeGenerator{
-			p:     astl,
-			todir: *g,
-			goCmd: *goCmd,
+			p:      astl,
+			todir:  *g,
+			goCmd:  *goCmd,
+			noTidy: *noTidy,
 		}).releaseOperator()
 		if err != nil {
 			log.Fatal("generate code error: ", err)
