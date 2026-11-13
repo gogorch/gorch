@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -11,6 +12,17 @@ import (
 	"github.com/gogorch/gorch/mlog"
 	"github.com/gogorch/gorch/pool"
 	"github.com/gogorch/gorch/recorder"
+)
+
+const (
+	// defaultEngineTimeout 未显式设置超时时间时的默认值
+	defaultEngineTimeout = 8 * time.Second
+)
+
+var (
+	errStartNotFound    = errors.New("engine: start directive not found")
+	errExecutorReleased = errors.New("engine: executor already executed and recycled, call Start again to get a new one")
+	errExecutorBusy     = errors.New("engine: executor is executing, one executor runs one flow only")
 )
 
 type Engine interface {
@@ -25,18 +37,19 @@ type engine struct {
 
 func (eng *engine) Start(key string) Executor {
 	st, has := eng.starters[key]
-	if has {
-		return newExecutor(executorOptions{
-			ctx:                 NewContext(),
-			startName:           key,
-			processor:           st,
-			timeout:             8 * time.Second,
-			strictGeneratedOnly: eng.strictGeneratedOnly.Load(),
-			traceHooks:          getTraceHooks(),
-		})
+	if !has {
+		// 返回一个始终报错的 Executor，避免调用方 Start("x").Execute() 直接空指针崩溃
+		return failedExecutor{err: fmt.Errorf("%w: %q", errStartNotFound, key)}
 	}
 
-	return nil
+	return newExecutor(executorOptions{
+		ctx:                 NewContext(),
+		startName:           key,
+		processor:           st,
+		timeout:             defaultEngineTimeout,
+		strictGeneratedOnly: eng.strictGeneratedOnly.Load(),
+		traceHooks:          getTraceHooks(),
+	})
 }
 
 func (eng *engine) SetStrictGeneratedOnly(enabled bool) {
@@ -85,8 +98,24 @@ type Executor interface {
 	Execute(ctx context.Context) error
 }
 
+// failedExecutor 用于 START 名称不存在时立即给出错误，而不是返回 nil
+type failedExecutor struct {
+	err error
+}
+
+func (fe failedExecutor) Inject(vals ...any) error          { return fe.err }
+func (fe failedExecutor) SetTimeout(to time.Duration)       {}
+func (fe failedExecutor) SetRecorder(r recorder.Recorder)   {}
+func (fe failedExecutor) SetLogOperatorName()               {}
+func (fe failedExecutor) SetLogThreshold(t time.Duration)   {}
+func (fe failedExecutor) Execute(ctx context.Context) error { return fe.err }
+
 type executor struct {
 	ctx *Context
+	// running 标记当前 Executor 是否正在执行，防止同一个 Executor 被并发复用
+	running atomic.Bool
+	// used 标记当前 Executor 是否已经执行过（执行完即回收到池中，不能再次执行）
+	used bool
 	// startName 当前执行入口名（START 名称）
 	startName string
 
@@ -139,7 +168,7 @@ func newExecutor(opt executorOptions) *executor {
 	s.timeout = opt.timeout
 	s.strictGeneratedOnly = opt.strictGeneratedOnly
 	if s.timeout <= 0 {
-		s.timeout = 8 * time.Second
+		s.timeout = defaultEngineTimeout
 	}
 	if opt.traceHooks == nil {
 		opt.traceHooks = getTraceHooks()
