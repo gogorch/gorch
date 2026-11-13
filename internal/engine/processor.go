@@ -623,7 +623,10 @@ func newProcessor(stmt *ast.OperatorStmt) *operatorProcessor {
 }
 
 var (
-	operatorPrepareDup = map[Preprocessor]bool{}
+	// operatorPrepareDup 记录已经执行过 Prepare 的算子原型（nil 接收者），
+	// 多个 Engine 并发构造时会同时读写，必须加锁。
+	operatorPrepareDupMu sync.Mutex
+	operatorPrepareDup   = map[Preprocessor]bool{}
 )
 
 func (op *operatorProcessor) Prepare() (err error) {
@@ -640,12 +643,16 @@ func (op *operatorProcessor) Prepare() (err error) {
 
 	nilo := of.NilProcessor()
 	if preprocessor, ok := nilo.(Preprocessor); ok {
-		if _, has := operatorPrepareDup[preprocessor]; !has {
+		// Prepare 在锁内执行，保证其它 Engine 不会看到一个「正在 Prepare」的原型。
+		operatorPrepareDupMu.Lock()
+		if _, prepared := operatorPrepareDup[preprocessor]; !prepared {
 			if err = preprocessor.Prepare(); err != nil {
+				operatorPrepareDupMu.Unlock()
 				return err
 			}
 			operatorPrepareDup[preprocessor] = true
 		}
+		operatorPrepareDupMu.Unlock()
 	}
 
 	if os, ok := nilo.(HasOperatorState); ok {
