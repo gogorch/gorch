@@ -147,6 +147,8 @@ type executor struct {
 var (
 	executorPool = pool.NewObjectPool(func(t *executor) {
 		t.ctx = nil
+		t.running.Store(false)
+		t.used = false
 		t.startName = ""
 		t.timeout = 0
 		t.recorder = nil
@@ -213,6 +215,19 @@ func (s *executor) SetLogThreshold(t time.Duration) {
 }
 
 func (s *executor) Execute(ctx context.Context) (retErr error) {
+	if s.used {
+		return errExecutorReleased
+	}
+	if s.ctx == nil {
+		return errExecutorReleased
+	}
+	if !s.running.CompareAndSwap(false, true) {
+		return errExecutorBusy
+	}
+	defer s.running.Store(false)
+	// 执行过的 Executor 会连同 Context 一起回收到对象池，禁止二次执行
+	defer func() { s.used = true }()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
