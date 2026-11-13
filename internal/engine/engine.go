@@ -58,6 +58,13 @@ func (eng *engine) SetStrictGeneratedOnly(enabled bool) {
 
 // New 创建执行引擎对象
 func New(p *ast.Primary) (Engine, error) {
+	if p == nil {
+		return nil, errors.New("engine: primary is nil")
+	}
+	if p.Starters == nil {
+		return nil, errors.New("engine: primary has no starters")
+	}
+
 	eng := &engine{
 		starters: make(map[string]PrepareProcessor, len(p.Starters.Sort)),
 	}
